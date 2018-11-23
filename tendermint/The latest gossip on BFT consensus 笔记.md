@@ -32,7 +32,11 @@ Tendermint解决状态机复制问题仍然是通过顺序执行共识实例来�
 
 - Validity:A decided value is valid, i.e., it satisfies the predefined predicate denoted valid().决定或者输出的值必然是合法的，也就是说，能够满足预先定义的断言valid()。
 
-断言`valid()`是依应用而定的，对于区块链，一个值如果不包含在区块链中它的上一个值(区块)的哈希值，那它就是不合法的。可见，这里的值并不是指一个通常的数，而是指的一个区块。
+断言`valid()`是依应用而定的，对于区块链，一个值如果不包含区块链中它的上一个值(区块)的哈希值，那它就是不合法的。可见，这里的值并不是指一个通常的数，而是指的一个区块。
 
 ## III.  TENDERMINT CONSENSUS ALGORITHM
+
+- 在某个回合`r`，当一个正确的进程收到值为`v`的`PROPOSAL`的消息，并且收到的`PRECOMMIT`消息对`id(v)`有`2f+1`的表决权时，就可以对这个`v`做决定
+- 在某个回合`r`,要对`v`发送`PRECOMMIT`消息，一个正确的进程必须等待接收`PROPOSAL`消息以及相应的有`2f+1`投票权的`PREVOTE`消息，否则就会发送一个值为`nil`的`PRECOMMIT`消息，比方说超时或者发生某些确定是错误的事件时。也就是说，只有收到超过2/3的`PREVOTE`才会发送`PRECOMMIT`，确保每一个回合一个进程只能`PRECOMMIT`一个值或者`nil`。举个极端的例子，如果没有限定超过2/3，那么就有可能碰到各自占一半投票权的两个`PREVOTE`，这时候一个正确的进程就会发出两个值各不相同的`PRECOMMIT`，所以要超过半数，超过多少合适这只是一个权衡。
+- 如果一个进程接受了一个`PROPOSAL`，则发出值为`id(v)`的`PROVOTE`消息，否则发出一个值为`nil`的`PROVOTE`。
 
