@@ -26,13 +26,11 @@ Gossip communication:如果一个正确的进程 `p` 在时刻`t`收到了某个
 
 Tendermint解决状态机复制问题仍然是通过顺序执行共识实例来达到对每一个事务块的一致。考虑区块链系统中的一个拜占庭问题的变种，基于合法性断言的拜占庭共识(Validity Predicate-based Byzantine consensus):
 
-- Agreement:No two correct processes decide on different values。只要进程是正确的，对同一个对象，他们所决定或者说输出的值必然是相同的。
+- Agreement:No two correct processes decide on different values。没有两个正确的进程会对不同的值做决定，也就是说所有正确的进程所处理的值必然是同一个。可见，这里的值是一个待决定的对象，而不是决定输出的值。
 
-- Termination:All correct processes eventually decide on a value.正确的进程必然会终止并且能够决定或者说输出一个值。
+- Termination:All correct processes eventually decide on a value.对一个值，正确的进程必然能做出决定。
 
-- Validity:A decided value is valid, i.e., it satisfies the predefined predicate denoted valid().决定或者输出的值必然是合法的，也就是说，能够满足预先定义的断言valid()。
-
-断言`valid()`是依应用而定的，对于区块链，一个值如果不包含区块链中它的上一个值(区块)的哈希值，那它就是不合法的。可见，这里的值并不是指一个通常的数，而是指的一个区块。
+- Validity:A decided value is valid, i.e., it satisfies the predefined predicate denoted valid().要决定的值必然是合法的，也就是说，能够满足预先定义的断言valid()。断言`valid()`是依应用而定的，对于区块链，一个值如果不包含区块链中它的上一个值(区块)的哈希值，那它就是不合法的。
 
 ## III.  TENDERMINT CONSENSUS ALGORITHM
 
