@@ -208,3 +208,91 @@ type Executor struct {
 *cmd.Execute()*实际上就是
 
 ## cli.Execute()
+
+```go
+func (e Executor) Execute() error {
+    e.SilenceUsage = true     
+    e.SilenceErrors = true    
+    err := e.Command.Execute()
+    ...
+    return err
+}                
+```
+
+并没有多少东西，除了这一句`err := e.Command.Execute()`，我们上面已经看到了，这里饶了一个圈，又回头执行Command去了，到这里为止，我们知道这个Command就是rootCmd。于是
+
+## cobra.Execute()
+
+```go
+func (c *Command) Execute() error {
+    _, err := c.ExecuteC()    
+    return err
+}  
+```
+
+继续绕圈
+
+## cobra.ExecuteC()
+
+```go
+func (c *Command) ExecuteC() (cmd *Command, err error) {
+    // Regardless of what command execute is called on, run on Root only
+    if c.HasParent() {
+        return c.Root().ExecuteC() 
+    }
+```
+当然，这里我们知道rootCmd是没有父命令的，所以往下看
+```go
+// windows hook
+    if preExecHookFn != nil { 
+        preExecHookFn(c)      
+    }
+   
+    // initialize help as the last point possible to allow for user
+    // overriding
+    c.InitDefaultHelpCmd()
+```
+到这里对理解流程是无关紧要的，我们先不管它。
+```go
+    var args []string
+
+    // Workaround FAIL with "go test -v" or "cobra.test -test.v", see #155
+    if c.args == nil && filepath.Base(os.Args[0]) != "cobra.test" {
+        args = os.Args[1:]
+    } else {
+        args = c.args
+    }
+```
+保证args是除了程序名字之外剩下的命令行参数。
+```go
+    var flags []string
+    if c.TraverseChildren {
+        cmd, flags, err = c.Traverse(args)
+    } else {
+        cmd, flags, err = c.Find(args)
+    }
+    if err != nil {
+        // If found parse to a subcommand and then failed, talk about the subcommand
+        if cmd != nil {
+            c = cmd
+        }
+        if !c.SilenceErrors {
+            c.Println("Error:", err.Error())
+            c.Printf("Run '%v --help' for usage.\n", c.CommandPath())
+        }
+        return c, err
+    }
+```
+以上找到子命令，比方说*init*,*node*以及对应这些子命令的参数列表，然后就是执行这个子命令
+```go
+    err = cmd.execute(flags)
+    ...
+    return cmd, err
+}
+
+```
+
+于是我们到达了问题的核心
+
+## cobra.execute(a []string) (err error)
+
