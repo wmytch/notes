@@ -296,3 +296,132 @@ func (c *Command) ExecuteC() (cmd *Command, err error) {
 
 ## cobra.execute(a []string) (err error)
 
+这个函数事实上是一条命令的执行的流程，就不细说了，出于我们的目的，只看跟*node*这条命令有关的部分。前面我们看到，在定义*node*的时候定义了一个函数变量*RunE*，这个函数变量对应的函数会在*execute*执行过程中调用，所以，我们只要看*RunE*所代表的那个函数
+
+## commands.NewRunNodeCmd.RunE
+
+```go
+RunE: func(cmd *cobra.Command, args []string) error {
+            n, err := nodeProvider(config, logger)
+            ...
+            if err := n.Start(); err != nil { 
+                return fmt.Errorf("Failed to start node: %v", err)
+            }
+            logger.Info("Started node", "nodeInfo", n.Switch().NodeInfo())
+
+            // Run forever
+            select {}
+
+            return nil
+        },
+    }
+```
+
+这里我们只需要看两个函数，一个是*nodeProvider*，一个是*Start*，而*nodeProvider*正是前面我们已经见过的*DefaultNewNode*,
+
+### DefaultNewNode
+
+```go
+func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
+    // Generate node PrivKey
+    nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
+    if err != nil {
+        return nil, err
+    }
+    return NewNode(config,
+        privval.LoadOrGenFilePV(config.PrivValidatorFile()),
+        nodeKey,              
+        proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
+        DefaultGenesisDocProviderFunc(config),
+        DefaultDBProvider,    
+        DefaultMetricsProvider(config.Instrumentation),
+        logger,
+    )
+}  
+```
+
+这个函数返回了一个新建的节点*n*。
+
+于是
+
+### n.Start()
+
+```go
+func (bs *BaseService) Start() error {
+    if atomic.CompareAndSwapUint32(&bs.started, 0, 1) {
+        if atomic.LoadUint32(&bs.stopped) == 1 {
+            bs.Logger.Error(fmt.Sprintf("Not starting %v -- already stopped", bs.name), "impl", bs.impl)                                                                                         
+            // revert flag    
+            atomic.StoreUint32(&bs.started, 0)
+            return ErrAlreadyStopped   
+        }
+        bs.Logger.Info(fmt.Sprintf("Starting %v", bs.name), "impl", bs.impl)                                                                                                                     
+        err := bs.impl.OnStart()       
+        if err != nil {       
+            // revert flag    
+            atomic.StoreUint32(&bs.started, 0)
+            return err        
+        }
+        return nil
+    }
+    bs.Logger.Debug(fmt.Sprintf("Not starting %v -- already started", bs.name), "impl", bs.impl)                                                                                                 
+    return ErrAlreadyStarted  
+}  
+```
+
+我们只需要直奔主题*bs.impl.OnStart()*。也就是
+
+## node.OnStart()
+
+在这里依次启动了这些服务
+
+```go
+err := n.eventBus.Start()
+listeners, err := n.startRPC()
+n.prometheusSrv = n.startPrometheusServer(n.config.Instrumentation.PrometheusListenAddr)
+err := n.transport.Listen(*addr)
+err = n.sw.Start()
+err = n.sw.DialPeersAsync(n.addrBook, splitAndTrimEmpty(n.config.P2P.PersistentPeers, ",", " "), true)
+n.indexerService.Start()
+```
+
+至此，一个节点开始运行。那么这些服务是在哪里设置的呢，我们回头看*DefaultNewNode*，可以发现就在
+
+### NewNode
+
+这个函数就先不多说，因为接下来的事情就跟这个函数有关，到时候再详细研究了。
+
+到此为止，可以画一个时序图了。
+
+## Tendermint 时序图
+
+```sequence
+note over main(): cmd/tendermint/main.go
+note over commands: cmd/tendermint/commands/root.go
+commands -> main(): rootCmd <- RootCmd
+note over cobra: spf13/cobra/command.go
+main() -> cobra: rootCmd.AddCommand(...)
+note over node:node/node.go
+node -> main(): nodeFunc <- DefaultNewNode 
+note over commands:cmd/tendermint/commands/run_node.go
+main()->commands:NewRunNodeCmd(nodeFunc)
+commands->main():返回一个note命令
+main()->cobra:rootCmd.AddCommand(note命令)
+note over cli:libs/cli/setup.go
+main()->cli:PrepareBaseCmd(rootCmd)
+cli->main():cmd<-Executor{rootCmd, os.Exit}
+main()->cli:cmd.Execute()
+cli->cobra:Execute():rootCmd
+cobra->cobra:ExecuteC():rootCmd
+note over cobra:找到子命令及其参数->cmd:node
+cobra->cobra:cmd.execute():node
+note over commands:run_node.go
+cobra->commands:RunE
+commands->node:DefaultNewNode()
+node->node:NewNode()
+node->commands:n<-NewNode
+note over common:libs/common/service.go 
+commands->common:n.Start()
+common->node:OnStart()
+note over node:就到这，在OnStart函数里边启动了一系列命令
+```
