@@ -183,9 +183,7 @@ func NewRunNodeCmd(nodeProvider nm.NodeProvider) *cobra.Command {
 	}
 }
 ```
-
 注意这里的*cmd*跟前面的*cmd*已经不是一回事，因为：
-
 ```go
 func PrepareBaseCmd(cmd *cobra.Command, envPrefix, defaultHome string) Executor { 
     cobra.OnInitialize(func() { initEnv(envPrefix) })
@@ -416,20 +414,92 @@ func NewNode(config *cfg.Config,
 	dbProvider DBProvider,
 	metricsProvider MetricsProvider,
 	logger log.Logger) (*Node, error) {
-
+```
+上面这部分我们不管它，往下看
+```go
 	// Get BlockStore
 	blockStoreDB, err := dbProvider(&DBContext{"blockstore", config})
 	if err != nil {
 		return nil, err
 	}
 	blockStore := bc.NewBlockStore(blockStoreDB)
+```
+这里创建了一个数据库
+*dbProvider*是什么呢：
+```go
+// DBContext specifies config information for loading a new DB.
+type DBContext struct {
+    ID     string
+    Config *cfg.Config
+}  
+   
+// DBProvider takes a DBContext and returns an instantiated DB.
+type DBProvider func(*DBContext) (dbm.DB, error)
+   
+// DefaultDBProvider returns a database using the DBBackend and DBDir
+// specified in the ctx.Config.
+func DefaultDBProvider(ctx *DBContext) (dbm.DB, error) {
+    dbType := dbm.DBBackendType(ctx.Config.DBBackend)
+    return dbm.NewDB(ctx.ID, dbType, ctx.Config.DBDir()), nil
+}  
+```
+没错，就是这个*DefaultDBProvider*，这是在*DefaultNewNode*函数里调用*NewNode*时传入的参数。这个函数最后返回一个由*NewDB*创建的名字是*ctx.ID*,位于*ctx.Config.DBDir()*目录的数据库，我们知道tendermint使用的是levelDB。
 
+```go
+func NewDB(name string, backend DBBackendType, dir string) DB {
+    dbCreator, ok := backends[backend]
+    if !ok {                  
+        keys := make([]string, len(backends))                                                                                                                                                    
+        i := 0
+        for k := range backends {          
+            keys[i] = string(k)            
+            i++
+        }
+        panic(fmt.Sprintf("Unknown db_backend %s, expected either %s", backend, strings.Join(keys, " or ")))                                                                                     
+    }
+
+    db, err := dbCreator(name, dir)
+    if err != nil {
+        panic(fmt.Sprintf("Error initializing DB: %v", err))                                                                                                                                     
+    }
+    return db
+}
+```
+*backends*是一个*map*：`var backends = map[DBBackendType]dbCreator{}`,并且初始化为空。
+
+*dbCreator*是个函数变量：`type dbCreator func(name string, dir string) (DB, error)`。
+而*DBBackendType*则是：
+
+```go
+type DBBackendType string
+const (
+    LevelDBBackend   DBBackendType = "leveldb" // legacy, defaults to goleveldb unless +gcc
+    CLevelDBBackend  DBBackendType = "cleveldb"
+    GoLevelDBBackend DBBackendType = "goleveldb"
+    MemDBBackend     DBBackendType = "memdb"
+    FSDBBackend      DBBackendType = "fsdb" // using the filesystem naively 
+) 
+```
+那么，*backends*是怎么初始化的呢？是通过在相应的数据库包的*init()*函数中调用*registerDBCreator*，我们知道这样的*init()*总是在*main()*之前执行。
+```go
+func registerDBCreator(backend DBBackendType, creator dbCreator, force bool) {                                                                                                                   
+    _, ok := backends[backend]
+    if !force && ok { 
+        return
+    }
+    backends[backend] = creator
+}     
+```
+总之我们创建了一个名字叫做*blockstore*，以及如下的一个叫*state*的的levelDB数据库：
+```go
 	// Get State
 	stateDB, err := dbProvider(&DBContext{"state", config})
 	if err != nil {
 		return nil, err
 	}
-
+```
+因为tendermint是个状态机，必然有个初始状态，这个初始状态在哪里呢，在一个初始文件中，所以我们要打开它或者创建它，注意跟*stateDB*跟*genDoc*的联系。
+```go
 	// Get genesis doc
 	// TODO: move to state package?
 	genDoc, err := loadGenesisDoc(stateDB)
@@ -442,18 +512,25 @@ func NewNode(config *cfg.Config,
 		// was changed, accidentally or not). Also good for audit trail.
 		saveGenesisDoc(stateDB, genDoc)
 	}
-
+```
+接下来是获取*state*，这个*state*不是上面说的那个数据的名字，那么是什么呢？我们同样知道tendermint维护一个状态机，这个*state*就是状态机的状态。
+```go
 	state, err := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
 	if err != nil {
 		return nil, err
 	}
+```
 
+```go
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
 	proxyApp := proxy.NewAppConns(clientCreator)
 	proxyApp.SetLogger(logger.With("module", "proxy"))
 	if err := proxyApp.Start(); err != nil {
 		return nil, fmt.Errorf("Error starting proxy app connections: %v", err)
 	}
+```
+这里有两种情况，一个是在启动*node*时带有*--proxy_app=kvstore*参数，这时候会启动内置的*kvstore*这个*ABCI APP*并与之建立三个连接(*consensus, mempool, query*)，一个是如果没有这个参数，那么就必须另外启动一个指定地址和端口的*ABCI APP*，所谓指定，指的是在配置文件里边的设置，启动tendermint时，同样会建立同上的三个连接。
+```go
 
 	// Create the handshaker, which calls RequestInfo, sets the AppVersion on the state,
 	// and replays any blocks as necessary to sync tendermint with the app.
