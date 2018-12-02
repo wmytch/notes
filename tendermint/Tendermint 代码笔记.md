@@ -84,7 +84,7 @@ var RootCmd = &cobra.Command{
 
 显然这是个指针，*rootCmd*当然就是指向同一个对象的另一个指针的名字。实际上，我们可以从`rootCmd := cmd.RootCmd`和`var RootCmd = &cobra.Command`的区别体会下go语言中变量初始化的两种不同方式。
 
-接下来用*AddCommand*注册了许多命令，其中就包括我们前面看到的*init*和*testnet*,当然，命令名和命令行参数并不一样，也没有这样的要求。必须要注意的是这里只是注册，并没有执行这些命令。这些命令的细节暂时留到将来再研究。
+接下来用*AddCommand*注册了许多命令，其中就包括我们前面看到的*init*和*testnet*,当然，命令名和命令行参数并不一样，也没有这样的要求。必须要注意的是这里只是注册，并没有执行这些命令。
 
 下面这段是又增加了一条命令，对应的是前面的*node*参数。
 
@@ -102,7 +102,9 @@ var RootCmd = &cobra.Command{
 	// Create & start node
 	rootCmd.AddCommand(cmd.NewRunNodeCmd(nodeFunc))
 ```
-前面的这段Note的意思如果你想写自己的什么什么，就把这个文件拷贝过去，然后自己添加命令就好啦。我们看代码，*nm.DefaultNewNode*的定义是：
+那段Note的意思如果你想写自己的什么什么，就把这个文件拷贝过去，然后自己添加命令就好啦。  
+
+我们继续看代码，*nm.DefaultNewNode*的定义是：
 
 ```go
 func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
@@ -123,7 +125,7 @@ func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
 }  
 ```
 
-这是个函数的定义，而`nodeFunc := nm.DefaultNewNode`也就意味着*nodeFunc*是个函数变量，从c/c++的角度来说这里要用函数指针来实现，在go里面不需要做这个区分。
+这是个函数的定义，`nodeFunc := nm.DefaultNewNode`也就意味着*nodeFunc*是个函数变量，从c/c++的角度来说首先要声明*nodeFunc*为一个函数指针然后再赋值，而在go里面就这样。
 
 接下来我们看*NewRunNodeCmd*:
 
@@ -170,7 +172,7 @@ func NewRunNodeCmd(nodeProvider nm.NodeProvider) *cobra.Command {
 
 很直白，主要工作是构造并返回一个*cobra.Command*对象的指针，另外就是`AddNodeFlags(cmd)`，给node命令增加些标志或者参数，这个函数细节暂时不深究。
 
-这里必须要跟C/C++做个比较，在C/C++中要用*malloc*或者*new*函数来分配对象的存储空间，并且在将来要记得*free*或者*delete*，而在go中创建对象就像上面代码这么做就可以了，将来也不需要手工回收空间，go是有垃圾收集机制的。
+这里必须要跟C/C++做个比较，在C/C++中调用*malloc*或者*new*函数来分配对象的存储空间，并且在将来要记得*free*或者*delete*，而在go中创建对象就像上面代码这么做就可以了，将来也不需要手工回收空间，go是有垃圾收集机制的，而且虽然这看上去像是个局部变量，在go中也不必担心这个问题。
 
 最后就是开始执行命令：
 
@@ -203,7 +205,7 @@ type Executor struct {
 }
 ```
 
-不是太明白为什么这里要继续使用*cmd*这个名字。大概是作者的恶趣味吧。
+**不是太明白为什么这里要继续使用*cmd*这个名字，大概是作者的恶趣味吧。**
 
 *cmd.Execute()*实际上就是
 
@@ -263,7 +265,7 @@ func (c *Command) ExecuteC() (cmd *Command, err error) {
         args = c.args
     }
 ```
-保证args是除了程序名字之外剩下的命令行参数。
+保证args是除了程序名字也就是tendermint之外剩下的命令行参数。
 ```go
     var flags []string
     if c.TraverseChildren {
@@ -317,7 +319,7 @@ RunE: func(cmd *cobra.Command, args []string) error {
     }
 ```
 
-这里我们只需要看两个函数，一个是*nodeProvider*，一个是*Start*，而*nodeProvider*正是前面我们已经见过的*DefaultNewNode*,
+这里我们有两个函数需要关注的，一个是*nodeProvider*，一个是*Start*，而*nodeProvider*正是前面我们已经见过的*DefaultNewNode*,
 
 ### DefaultNewNode
 
@@ -369,30 +371,7 @@ func (bs *BaseService) Start() error {
 }  
 ```
 
-我们只需要直奔主题*bs.impl.OnStart()*。也就是
-
-## node.OnStart()
-
-在这里依次启动了这些服务
-
-```go
-err := n.eventBus.Start()
-listeners, err := n.startRPC()
-n.prometheusSrv = n.startPrometheusServer(n.config.Instrumentation.PrometheusListenAddr)
-err := n.transport.Listen(*addr)
-err = n.sw.Start()
-err = n.sw.DialPeersAsync(n.addrBook, splitAndTrimEmpty(n.config.P2P.PersistentPeers, ",", " "), true)
-n.indexerService.Start()
-```
-
-至此，一个节点开始运行。那么这些服务是在哪里设置的呢，我们回头看*DefaultNewNode*，可以发现就在
-
-### NewNode
-
-这个函数就先不多说，因为接下来的事情就跟这个函数有关，到时候再详细研究了。
-
-到此为止，可以画一个时序图了。
-
+最终问题的关键就在*OnStart*和*NewNode*上，在研究这两个函数之前，我们先看个时序图，从整体上把握一下  
 ## Tendermint 时序图
 
 ```sequence
@@ -425,3 +404,356 @@ commands->common:n.Start()
 common->node:OnStart()
 note over node:就到这，在OnStart函数里边启动了一系列命令
 ```
+我们先看
+## NewNode()
+```go
+// NewNode returns a new, ready to go, Tendermint Node.
+func NewNode(config *cfg.Config,
+	privValidator types.PrivValidator,
+	nodeKey *p2p.NodeKey,
+	clientCreator proxy.ClientCreator,
+	genesisDocProvider GenesisDocProvider,
+	dbProvider DBProvider,
+	metricsProvider MetricsProvider,
+	logger log.Logger) (*Node, error) {
+
+	// Get BlockStore
+	blockStoreDB, err := dbProvider(&DBContext{"blockstore", config})
+	if err != nil {
+		return nil, err
+	}
+	blockStore := bc.NewBlockStore(blockStoreDB)
+
+	// Get State
+	stateDB, err := dbProvider(&DBContext{"state", config})
+	if err != nil {
+		return nil, err
+	}
+
+	// Get genesis doc
+	// TODO: move to state package?
+	genDoc, err := loadGenesisDoc(stateDB)
+	if err != nil {
+		genDoc, err = genesisDocProvider()
+		if err != nil {
+			return nil, err
+		}
+		// save genesis doc to prevent a certain class of user errors (e.g. when it
+		// was changed, accidentally or not). Also good for audit trail.
+		saveGenesisDoc(stateDB, genDoc)
+	}
+
+	state, err := sm.LoadStateFromDBOrGenesisDoc(stateDB, genDoc)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
+	proxyApp := proxy.NewAppConns(clientCreator)
+	proxyApp.SetLogger(logger.With("module", "proxy"))
+	if err := proxyApp.Start(); err != nil {
+		return nil, fmt.Errorf("Error starting proxy app connections: %v", err)
+	}
+
+	// Create the handshaker, which calls RequestInfo, sets the AppVersion on the state,
+	// and replays any blocks as necessary to sync tendermint with the app.
+	consensusLogger := logger.With("module", "consensus")
+	handshaker := cs.NewHandshaker(stateDB, state, blockStore, genDoc)
+	handshaker.SetLogger(consensusLogger)
+	if err := handshaker.Handshake(proxyApp); err != nil {
+		return nil, fmt.Errorf("Error during handshake: %v", err)
+	}
+
+	// Reload the state. It will have the Version.Consensus.App set by the
+	// Handshake, and may have other modifications as well (ie. depending on
+	// what happened during block replay).
+	state = sm.LoadState(stateDB)
+
+	// Ensure the state's block version matches that of the software.
+	if state.Version.Consensus.Block != version.BlockProtocol {
+		return nil, fmt.Errorf(
+			"Block version of the software does not match that of the state.\n"+
+				"Got version.BlockProtocol=%v, state.Version.Consensus.Block=%v",
+			version.BlockProtocol,
+			state.Version.Consensus.Block,
+		)
+	}
+
+	if config.PrivValidatorListenAddr != "" {
+		// If an address is provided, listen on the socket for a connection from an
+		// external signing process.
+		// FIXME: we should start services inside OnStart
+		privValidator, err = createAndStartPrivValidatorSocketClient(config.PrivValidatorListenAddr, logger)
+		if err != nil {
+			return nil, errors.Wrap(err, "Error with private validator socket client")
+		}
+	}
+
+	// Decide whether to fast-sync or not
+	// We don't fast-sync when the only validator is us.
+	fastSync := config.FastSync
+	if state.Validators.Size() == 1 {
+		addr, _ := state.Validators.GetByIndex(0)
+		if bytes.Equal(privValidator.GetAddress(), addr) {
+			fastSync = false
+		}
+	}
+
+	// Log whether this node is a validator or an observer
+	if state.Validators.HasAddress(privValidator.GetAddress()) {
+		consensusLogger.Info("This node is a validator", "addr", privValidator.GetAddress(), "pubKey", privValidator.GetPubKey())
+	} else {
+		consensusLogger.Info("This node is not a validator", "addr", privValidator.GetAddress(), "pubKey", privValidator.GetPubKey())
+	}
+
+	csMetrics, p2pMetrics, memplMetrics, smMetrics := metricsProvider()
+
+	// Make MempoolReactor
+	mempool := mempl.NewMempool(
+		config.Mempool,
+		proxyApp.Mempool(),
+		state.LastBlockHeight,
+		mempl.WithMetrics(memplMetrics),
+		mempl.WithPreCheck(sm.TxPreCheck(state)),
+		mempl.WithPostCheck(sm.TxPostCheck(state)),
+	)
+	mempoolLogger := logger.With("module", "mempool")
+	mempool.SetLogger(mempoolLogger)
+	if config.Mempool.WalEnabled() {
+		mempool.InitWAL() // no need to have the mempool wal during tests
+	}
+	mempoolReactor := mempl.NewMempoolReactor(config.Mempool, mempool)
+	mempoolReactor.SetLogger(mempoolLogger)
+
+	if config.Consensus.WaitForTxs() {
+		mempool.EnableTxsAvailable()
+	}
+
+	// Make Evidence Reactor
+	evidenceDB, err := dbProvider(&DBContext{"evidence", config})
+	if err != nil {
+		return nil, err
+	}
+	evidenceLogger := logger.With("module", "evidence")
+	evidenceStore := evidence.NewEvidenceStore(evidenceDB)
+	evidencePool := evidence.NewEvidencePool(stateDB, evidenceStore)
+	evidencePool.SetLogger(evidenceLogger)
+	evidenceReactor := evidence.NewEvidenceReactor(evidencePool)
+	evidenceReactor.SetLogger(evidenceLogger)
+
+	blockExecLogger := logger.With("module", "state")
+	// make block executor for consensus and blockchain reactors to execute blocks
+	blockExec := sm.NewBlockExecutor(
+		stateDB,
+		blockExecLogger,
+		proxyApp.Consensus(),
+		mempool,
+		evidencePool,
+		sm.BlockExecutorWithMetrics(smMetrics),
+	)
+
+	// Make BlockchainReactor
+	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
+	bcReactor.SetLogger(logger.With("module", "blockchain"))
+
+	// Make ConsensusReactor
+	consensusState := cs.NewConsensusState(
+		config.Consensus,
+		state.Copy(),
+		blockExec,
+		blockStore,
+		mempool,
+		evidencePool,
+		cs.StateMetrics(csMetrics),
+	)
+	consensusState.SetLogger(consensusLogger)
+	if privValidator != nil {
+		consensusState.SetPrivValidator(privValidator)
+	}
+	consensusReactor := cs.NewConsensusReactor(consensusState, fastSync, cs.ReactorMetrics(csMetrics))
+	consensusReactor.SetLogger(consensusLogger)
+
+	eventBus := types.NewEventBus()
+	eventBus.SetLogger(logger.With("module", "events"))
+
+	// services which will be publishing and/or subscribing for messages (events)
+	// consensusReactor will set it on consensusState and blockExecutor
+	consensusReactor.SetEventBus(eventBus)
+
+	// Transaction indexing
+	var txIndexer txindex.TxIndexer
+	switch config.TxIndex.Indexer {
+	case "kv":
+		store, err := dbProvider(&DBContext{"tx_index", config})
+		if err != nil {
+			return nil, err
+		}
+		if config.TxIndex.IndexTags != "" {
+			txIndexer = kv.NewTxIndex(store, kv.IndexTags(splitAndTrimEmpty(config.TxIndex.IndexTags, ",", " ")))
+		} else if config.TxIndex.IndexAllTags {
+			txIndexer = kv.NewTxIndex(store, kv.IndexAllTags())
+		} else {
+			txIndexer = kv.NewTxIndex(store)
+		}
+	default:
+		txIndexer = &null.TxIndex{}
+	}
+
+	indexerService := txindex.NewIndexerService(txIndexer, eventBus)
+	indexerService.SetLogger(logger.With("module", "txindex"))
+
+	var (
+		p2pLogger = logger.With("module", "p2p")
+		nodeInfo  = makeNodeInfo(
+			config,
+			nodeKey.ID(),
+			txIndexer,
+			genDoc.ChainID,
+			p2p.NewProtocolVersion(
+				version.P2PProtocol, // global
+				state.Version.Consensus.Block,
+				state.Version.Consensus.App,
+			),
+		)
+	)
+
+	// Setup Transport.
+	var (
+		mConnConfig = p2p.MConnConfig(config.P2P)
+		transport   = p2p.NewMultiplexTransport(nodeInfo, *nodeKey, mConnConfig)
+		connFilters = []p2p.ConnFilterFunc{}
+		peerFilters = []p2p.PeerFilterFunc{}
+	)
+
+	if !config.P2P.AllowDuplicateIP {
+		connFilters = append(connFilters, p2p.ConnDuplicateIPFilter())
+	}
+
+	// Filter peers by addr or pubkey with an ABCI query.
+	// If the query return code is OK, add peer.
+	if config.FilterPeers {
+		connFilters = append(
+			connFilters,
+			// ABCI query for address filtering.
+			func(_ p2p.ConnSet, c net.Conn, _ []net.IP) error {
+				res, err := proxyApp.Query().QuerySync(abci.RequestQuery{
+					Path: fmt.Sprintf("/p2p/filter/addr/%s", c.RemoteAddr().String()),
+				})
+				if err != nil {
+					return err
+				}
+				if res.IsErr() {
+					return fmt.Errorf("Error querying abci app: %v", res)
+				}
+
+				return nil
+			},
+		)
+
+		peerFilters = append(
+			peerFilters,
+			// ABCI query for ID filtering.
+			func(_ p2p.IPeerSet, p p2p.Peer) error {
+				res, err := proxyApp.Query().QuerySync(abci.RequestQuery{
+					Path: fmt.Sprintf("/p2p/filter/id/%s", p.ID()),
+				})
+				if err != nil {
+					return err
+				}
+				if res.IsErr() {
+					return fmt.Errorf("Error querying abci app: %v", res)
+				}
+
+				return nil
+			},
+		)
+	}
+
+	p2p.MultiplexTransportConnFilters(connFilters...)(transport)
+
+	// Setup Switch.
+	sw := p2p.NewSwitch(
+		config.P2P,
+		transport,
+		p2p.WithMetrics(p2pMetrics),
+		p2p.SwitchPeerFilters(peerFilters...),
+	)
+	sw.SetLogger(p2pLogger)
+	sw.AddReactor("MEMPOOL", mempoolReactor)
+	sw.AddReactor("BLOCKCHAIN", bcReactor)
+	sw.AddReactor("CONSENSUS", consensusReactor)
+	sw.AddReactor("EVIDENCE", evidenceReactor)
+	sw.SetNodeInfo(nodeInfo)
+	sw.SetNodeKey(nodeKey)
+
+	p2pLogger.Info("P2P Node ID", "ID", nodeKey.ID(), "file", config.NodeKeyFile())
+
+	// Optionally, start the pex reactor
+	//
+	// TODO:
+	//
+	// We need to set Seeds and PersistentPeers on the switch,
+	// since it needs to be able to use these (and their DNS names)
+	// even if the PEX is off. We can include the DNS name in the NetAddress,
+	// but it would still be nice to have a clear list of the current "PersistentPeers"
+	// somewhere that we can return with net_info.
+	//
+	// If PEX is on, it should handle dialing the seeds. Otherwise the switch does it.
+	// Note we currently use the addrBook regardless at least for AddOurAddress
+	addrBook := pex.NewAddrBook(config.P2P.AddrBookFile(), config.P2P.AddrBookStrict)
+
+	// Add ourselves to addrbook to prevent dialing ourselves
+	addrBook.AddOurAddress(nodeInfo.NetAddress())
+
+	addrBook.SetLogger(p2pLogger.With("book", config.P2P.AddrBookFile()))
+	if config.P2P.PexReactor {
+		// TODO persistent peers ? so we can have their DNS addrs saved
+		pexReactor := pex.NewPEXReactor(addrBook,
+			&pex.PEXReactorConfig{
+				Seeds:    splitAndTrimEmpty(config.P2P.Seeds, ",", " "),
+				SeedMode: config.P2P.SeedMode,
+			})
+		pexReactor.SetLogger(p2pLogger)
+		sw.AddReactor("PEX", pexReactor)
+	}
+
+	sw.SetAddrBook(addrBook)
+
+	// run the profile server
+	profileHost := config.ProfListenAddress
+	if profileHost != "" {
+		go func() {
+			logger.Error("Profile server", "err", http.ListenAndServe(profileHost, nil))
+		}()
+	}
+
+	node := &Node{
+		config:        config,
+		genesisDoc:    genDoc,
+		privValidator: privValidator,
+
+		transport: transport,
+		sw:        sw,
+		addrBook:  addrBook,
+		nodeInfo:  nodeInfo,
+		nodeKey:   nodeKey,
+
+		stateDB:          stateDB,
+		blockStore:       blockStore,
+		bcReactor:        bcReactor,
+		mempoolReactor:   mempoolReactor,
+		consensusState:   consensusState,
+		consensusReactor: consensusReactor,
+		evidencePool:     evidencePool,
+		proxyApp:         proxyApp,
+		txIndexer:        txIndexer,
+		indexerService:   indexerService,
+		eventBus:         eventBus,
+	}
+	node.BaseService = *cmn.NewBaseService(logger, "Node", node)
+	return node, nil
+}
+```
+节点有了，接下来看看启动的时候会怎么样
+
+## node.OnStart()
