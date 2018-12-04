@@ -1,4 +1,4 @@
-# Tendermint 代码笔记
+# Tendermint 代码笔记 主流程
 
 [TOC]
 ## main.main()
@@ -17,8 +17,9 @@ import (
 	nm "github.com/tendermint/tendermint/node"
 )
 ~~~
-上面这一段就不说了，一看就明白。
+上面这一段就不说了，一看就明白，不过要注意的是在这些导入的包中，如果有*init()*函数，那么会在*main()*函数之前执行。
 在研究main函数之前，我们需要看看文档里边运行tendermint的命令：
+
 ```bash
 tendermint init
 tendermint testnet --help
@@ -791,7 +792,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 
 很直白，就是分别保存了前面建立的3个连接。
 
-
+### NewHandshaker
 
 ```go
 
@@ -803,7 +804,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	if err := handshaker.Handshake(proxyApp); err != nil {
 		return nil, fmt.Errorf("Error during handshake: %v", err)
 	}
-
+```
+###  LoadState
+```go
 	// Reload the state. It will have the Version.Consensus.App set by the
 	// Handshake, and may have other modifications as well (ie. depending on
 	// what happened during block replay).
@@ -818,7 +821,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 			state.Version.Consensus.Block,
 		)
 	}
-
+```
+### ValidatorSocketClient
+```go
 	if config.PrivValidatorListenAddr != "" {
 		// If an address is provided, listen on the socket for a connection from an
 		// external signing process.
@@ -845,9 +850,13 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	} else {
 		consensusLogger.Info("This node is not a validator", "addr", privValidator.GetAddress(), "pubKey", privValidator.GetPubKey())
 	}
-
+```
+### metrics
+```go
 	csMetrics, p2pMetrics, memplMetrics, smMetrics := metricsProvider()
-
+```
+### mempool
+```go
 	// Make MempoolReactor
 	mempool := mempl.NewMempool(
 		config.Mempool,
@@ -868,7 +877,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	if config.Consensus.WaitForTxs() {
 		mempool.EnableTxsAvailable()
 	}
-
+```
+### evidence
+```go
 	// Make Evidence Reactor
 	evidenceDB, err := dbProvider(&DBContext{"evidence", config})
 	if err != nil {
@@ -880,7 +891,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	evidencePool.SetLogger(evidenceLogger)
 	evidenceReactor := evidence.NewEvidenceReactor(evidencePool)
 	evidenceReactor.SetLogger(evidenceLogger)
-
+```
+### blockchain
+```go
 	blockExecLogger := logger.With("module", "state")
 	// make block executor for consensus and blockchain reactors to execute blocks
 	blockExec := sm.NewBlockExecutor(
@@ -895,7 +908,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	// Make BlockchainReactor
 	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
-
+```
+###  Consensus
+```go
 	// Make ConsensusReactor
 	consensusState := cs.NewConsensusState(
 		config.Consensus,
@@ -919,7 +934,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	// services which will be publishing and/or subscribing for messages (events)
 	// consensusReactor will set it on consensusState and blockExecutor
 	consensusReactor.SetEventBus(eventBus)
-
+```
+### Transaction indexing
+```go
 	// Transaction indexing
 	var txIndexer txindex.TxIndexer
 	switch config.TxIndex.Indexer {
@@ -941,7 +958,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 
 	indexerService := txindex.NewIndexerService(txIndexer, eventBus)
 	indexerService.SetLogger(logger.With("module", "txindex"))
-
+```
+### p2p
+```go
 	var (
 		p2pLogger = logger.With("module", "p2p")
 		nodeInfo  = makeNodeInfo(
@@ -1010,7 +1029,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	}
 
 	p2p.MultiplexTransportConnFilters(connFilters...)(transport)
-
+```
+### switch
+```go
 	// Setup Switch.
 	sw := p2p.NewSwitch(
 		config.P2P,
@@ -1066,7 +1087,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 			logger.Error("Profile server", "err", http.ListenAndServe(profileHost, nil))
 		}()
 	}
-
+```
+### return
+```go
 	node := &Node{
 		config:        config,
 		genesisDoc:    genDoc,
@@ -1097,3 +1120,9 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 节点有了，接下来看看启动的时候会怎么样
 
 ## node.OnStart()
+
+好吧，其实也没什么特别可说的，就是启动了一些服务。
+
+## 小结
+
+主流程就这样了，接下来要开始进入各个包，研究一下。
