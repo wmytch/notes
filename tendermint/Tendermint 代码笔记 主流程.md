@@ -1123,6 +1123,169 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 
 好吧，其实也没什么特别可说的，就是启动了一些服务。
 
-## 小结
+## 关于service
 
-主流程就这样了，接下来要开始进入各个包，研究一下。
+以BlockPool为例
+
+```go
+type BlockPool struct {
+    cmn.BaseService
+    startTime time.Time
+
+    mtx sync.Mutex
+    // block requests         
+    requesters map[int64]*bpRequester
+    height     int64 // the lowest key in requesters.                                                                                                                                            
+    // peers
+    peers         map[p2p.ID]*bpPeer
+    maxPeerHeight int64       
+   
+    // atomic
+    numPending int32 // number of requests pending assignment or block response                                                                                                                  
+   
+    requestsCh chan<- BlockRequest 
+    errorsCh   chan<- peerError
+}  
+```
+这里定义了一个*Service*，*BlockPool*，出于我们的目的，只需要关注*cmn.BaseService*，至于*cmn*，是*github.com/tendermint/tendermint/libs/common*的别名，我们且去看看*BaseService*的定义
+
+```go
+type BaseService struct {
+    Logger  log.Logger
+    name    string
+    started uint32 // atomic
+    stopped uint32 // atomic
+    quit    chan struct{}
+
+    // The "subclass" of BaseService
+    impl Service
+}
+```
+
+忘掉*`// The "subclass" of BaseService`*的说法，事实上这里是*BaseService*组合了*Service*，如果一定要说也应该是*BaseService*是接口*Service*的子类而不是反过来。*Service*是个接口，要牢记这一点，接下来会有进一步说明。
+
+```go
+func NewBlockPool(start int64, requestsCh chan<- BlockRequest, errorsCh chan<- peerError) *BlockPool {                                                                                           
+    bp := &BlockPool{
+        peers: make(map[p2p.ID]*bpPeer),                                                                                                                                                         
+   
+        requesters: make(map[int64]*bpRequester),  
+        height:     start,
+        numPending: 0,
+
+        requestsCh: requestsCh,        
+        errorsCh:   errorsCh,
+    }
+    bp.BaseService = *cmn.NewBaseService(nil, "BlockPool", bp)
+    return bp
+}
+
+```
+
+这个函数创建了一个*BlockPool* *Service*，*bp*，我们看看*NewBaseService*做了什么
+
+```go
+func NewBaseService(logger log.Logger, name string, impl Service) *BaseService {
+    if logger == nil {
+        logger = log.NewNopLogger()
+    }
+
+    return &BaseService{
+        Logger: logger,
+        name:   name,
+        quit:   make(chan struct{}),
+        impl:   impl,
+    }
+}
+```
+
+所以这里出现了一个环：*bp.BaseService.impl=bp*,我们比较下*C++*的实现
+
+```c++
+class Service {
+    virtual bool Start()=0;
+    virtual bool OnStart()=0;
+    
+    virtual bool Stop()=0;
+    virtual bool OnStop()=0;
+    ...   
+};
+class BaseService:public Service{
+    Logger logger;
+    string name;
+    virtual bool Start();
+    virtual bool OnStart();
+    
+    virtual bool Stop();
+    virtual bool OnStop()
+    ...
+};
+class bp:public BaseService{
+    bool OnStart();
+    bool OnStop();
+    ....
+};
+```
+
+也就是继承就可以了。实际上，在*C++*里，纯虚类也只能被继承，如果一定要组合，那么*Service*就不能是一个接口。
+
+毕竟go不是一门oop。
+
+回过头来继续说*bp*，需要并且必须实现*Service*接口的*OnStart()*和*OnStop()*
+
+```go
+	type FooService struct {
+        BaseService
+        // private fields
+    }
+
+    func NewFooService() *FooService {
+        fs := &FooService{
+            // init
+        }
+        fs.BaseService = *NewBaseService(log, "FooService", fs)
+        return fs
+    }
+
+    func (fs *FooService) OnStart() error {
+        fs.BaseService.OnStart() // Always call the overridden method.
+        // initialize private fields
+        // start subroutines, etc.
+    }
+
+    func (fs *FooService) OnStop() error {
+        fs.BaseService.OnStop() // Always call the overridden method.
+        // close/destroy private fields
+        // stop subroutines, etc.
+    }
+
+```
+
+其余的函数都在*BaseService*实现：
+
+```go
+func (bs *BaseService) Start() error {
+    if atomic.CompareAndSwapUint32(&bs.started, 0, 1) {
+        if atomic.LoadUint32(&bs.stopped) == 1 {
+            bs.Logger.Error(fmt.Sprintf("Not starting %v -- already stopped", bs.name), "impl", bs.impl)
+            // revert flag
+            atomic.StoreUint32(&bs.started, 0)
+            return ErrAlreadyStopped
+        }
+        bs.Logger.Info(fmt.Sprintf("Starting %v", bs.name), "impl", bs.impl)
+        err := bs.impl.OnStart()
+        if err != nil {
+            // revert flag
+            atomic.StoreUint32(&bs.started, 0)
+            return err
+        }
+        return nil
+    }
+    bs.Logger.Debug(fmt.Sprintf("Not starting %v -- already started", bs.name), "impl", bs.impl)
+    return ErrAlreadyStarted
+}
+```
+
+没有必要的话我们并不需要再去增加或者修改上面这段代码。
+
+总结一下，如果我们需要定义一个*Service*实例，在这个实例的定义中必须包含一个*BaseService*的引用，在这个实例的构造函数，也就是通常的*MakeNewXXXX*一类的函数中，我们需要调用*NewBaseService*函数，并把这个*Service*实例作为参数传入，这样在*BaseService*里就包含了对这个实例的引用，接下来我们至少要实现*OnStart()*和*OnStop()*两个函数，这两个函数的接收者是*Service*实例本身，因为，比方说，在*BaseService*的*Start()*函数中会通过*impl*来调用*Service*实例的*OnStart()*，*OnStop()*同理。当然这是对*tendermint*的框架而言，并不是go本身需要如此。
