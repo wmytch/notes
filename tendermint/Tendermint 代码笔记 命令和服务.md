@@ -1,4 +1,4 @@
-# Tendermint笔记 命令和服务
+# Tendermint 代码笔记 命令和服务
 
 [TOC]
 
