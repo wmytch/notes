@@ -71,21 +71,19 @@ func initFiles(cmd *cobra.Command, args []string) error {
 
 ```
 
-*`initFilesWithConfig(config)`*参看源文件，就不讨论了。
+这里定义了一个函数*initFiles*，并将其赋给了*RunE*这个函数变量，而*`initFilesWithConfig(config)`*参看源文件，就不讨论了。
 
-这里申明了一个函数*initFiles*，并将其赋给了*RunE*这个函数变量。
+实现了这么一条命令后，就可以通过*rootCmd.AddCommand( cmd.InitFilesCmd)*将其加入到rootCmd的命令树中，*rootCmd*是一个指针，被初始化为前面所说的*RootCmd*，当然，这也是个指针。
 
-实现了这么一条命令后，就可以用*rootCmd.AddCommand( cmd.InitFilesCmd)*将其加入到rootCmd的命令树中，rootCmd是一个指针，被赋值为前面所说的*RootCmd*这个指针。
+我们已经知道，在执行一条命令时，并不会从命令树中取命令，而最多只是通过遍历树来判断一条命令是否存在。
 
-我们已经知道，在执行一条命令时，并不会从这个命令树中取命令，而最多只是通过遍历树来判断一条命令是否存在。
+一条命令的执行流程我们已经讨论过，就不再详述。总之，在*github.com/spf13/cobra/command.go*中定义的这个函数`func (c *Command) execute(a []string) (err error)`，规定了这个流程。
 
-一条命令的执行的流程我们已经讨论过，就不再详述。总之，在*github.com/spf13/cobra/command.go*中定义的这个函数`func (c *Command) execute(a []string) (err error)`，规定了这个流程。
-
-而正如我们已经讨论过的，***node*这条命令的服务就是在其*RunE*中启动的。**
+而正如我们已经讨论过的，***node*这条命令中的服务就是在其*RunE*中启动的。**
 
 ## 服务 Service
 
-说完命令，我们开始讨论服务。以BlockPool为例
+说完命令，我们讨论服务。以BlockPool为例
 
 ```go
 type BlockPool struct {
