@@ -8,7 +8,7 @@
 
 在tendermint中，使用了一个叫cobra的包，我们所说的Command就在这个包中定义，具体的定义可以参见源文件，路径大概会是在*github.com/spf13/cobra/command.go*。
 
-至于命令是什么，比方说，我们要编译一个go程序，会使用命令行:`go build xx.go`，这里的*build*就是命令，同样的，对于tendermint，启动一个节点时的命令行：`tendermint node`中的*node*就是命令。
+至于命令是什么，比方说，我们要编译一个go程序，会使用命令行:`go build xx.go`，这里的*build*就是命令，同样的，对于tendermint，启动一个节点时的命令行:`tendermint node`中的*node*就是命令。
 
 而使用这个*cobra*包，我们可以以一种形式化的方式实现一条命令。下面开始举例说明。
 
