@@ -1,410 +1,74 @@
-# Tendermint 代码笔记 主流程
+# Tendermint 代码笔记 (三) node
 
 [TOC]
-## main.main()
+node命令实现了Tendermint core的内容，正如之前讨论过的，包括两个部分，命令和服务，命令指的是node这个命令本身，服务指在node中提供的服务。我们分别讨论。
 
-~~~go
-package main
+## 命令
 
-import (
-	"os"
-	"path/filepath"
+就node命令本身而言，其定义在github.com/tendermint/tendermint/cmd/tendermint/commands/run_node.go中，里面的内容在《代码笔记 (一)》中已经讨论过，就不再重复了。
 
-	"github.com/tendermint/tendermint/libs/cli"
+## 服务
 
-	cmd "github.com/tendermint/tendermint/cmd/tendermint/commands"
-	cfg "github.com/tendermint/tendermint/config"
-	nm "github.com/tendermint/tendermint/node"
-)
-~~~
-上面这一段就不说了，一看就明白，不过要注意的是在这些导入的包中，如果有*init()*函数，那么会在*main()*函数之前执行。
-在研究main函数之前，我们需要看看文档里边运行tendermint的命令：
-
-```bash
-tendermint init
-tendermint testnet --help
-tendermint node
-tendermint node --proxy_app=kvstore
-```
-从c/c++的角度来说，本能的会这样来实现：
-
-```c
-if (strcmp("init",argv[1]) == 0){  //C++的话通常是argv[1]=="init"
-    return init(argc,argv);
-} else if(strcmp("testnet",argv[1])==0){
-    return testnet(argc,argv);
-}else if(strcmp("node",argv[1])) == 0 ){
-    return node(argc,argv);
-}    
-```
-
-当然并不是说这样好或者不好，至少到目前为止，没有任何理由可以说这样处理不好。我们下面看在tendermint中怎么处理的：
-```go
-	rootCmd := cmd.RootCmd
-	rootCmd.AddCommand(
-		cmd.GenValidatorCmd,
-		cmd.InitFilesCmd,
-		cmd.ProbeUpnpCmd,
-		cmd.LiteCmd,
-		cmd.ReplayCmd,
-		cmd.ReplayConsoleCmd,
-		cmd.ResetAllCmd,
-		cmd.ResetPrivValidatorCmd,
-		cmd.ShowValidatorCmd,
-		cmd.TestnetFilesCmd,
-		cmd.ShowNodeIDCmd,
-		cmd.GenNodeKeyCmd,
-		cmd.VersionCmd)
-```
-*cmd.RootCmd*的定义是这样的：
+### Node定义
 
 ```go
-var RootCmd = &cobra.Command{ 
-    Use:   "tendermint",      
-    Short: "Tendermint Core (BFT Consensus) in Go",
-    PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {                                                                                                                     
-        if cmd.Name() == VersionCmd.Name() {
-            return nil
-        }
-        config, err = ParseConfig()    
-        if err != nil {
-            return err
-        }
-        logger, err = tmflags.ParseLogLevel(config.LogLevel, logger, cfg.DefaultLogLevel())                                                                                                      
-        if err != nil {
-            return err
-        }
-        if viper.GetBool(cli.TraceFlag) {  
-            logger = log.NewTracingLogger(logger)                                                                                                                                                
-        }
-        logger = logger.With("module", "main")
-        return nil
-    },
-}
-```
+// Node is the highest level interface to a full Tendermint node.
+// It includes all configuration information and running services.                                                                                                                               
+type Node struct {            
+    cmn.BaseService           
+                              
+    // config 
+    config        *cfg.Config 
+    genesisDoc    *types.GenesisDoc   // initial validator set
+    privValidator types.PrivValidator // local node's validator key                                                                                                                              
+                              
+    // network 
+    transport   *p2p.MultiplexTransport        
+    sw          *p2p.Switch  // p2p connections
+    addrBook    pex.AddrBook // known peers    
+    nodeInfo    p2p.NodeInfo
+    nodeKey     *p2p.NodeKey // our node privkey
+    isListening bool          
 
-显然这是个指针，*rootCmd*当然就是指向同一个对象的另一个指针的名字。实际上，我们可以从`rootCmd := cmd.RootCmd`和`var RootCmd = &cobra.Command`的区别体会下go语言中变量初始化的两种不同方式。
-
-接下来用*AddCommand*注册了许多命令，其中就包括我们前面看到的*init*和*testnet*,当然，命令名和命令行参数并不一样，也没有这样的要求。必须要注意的是这里只是注册，并没有执行这些命令。
-
-下面这段是又增加了一条命令，对应的是前面的*node*参数。
-
-```go
-	// NOTE:
-	// Users wishing to:
-	//	* Use an external signer for their validators
-	//	* Supply an in-proc abci app
-	//	* Supply a genesis doc file from another source
-	//	* Provide their own DB implementation
-	// can copy this file and use something other than the
-	// DefaultNewNode function
-	nodeFunc := nm.DefaultNewNode
-
-	// Create & start node
-	rootCmd.AddCommand(cmd.NewRunNodeCmd(nodeFunc))
-```
-那段Note的意思如果你想写自己的什么什么，就把这个文件拷贝过去，然后自己添加命令就好啦。  
-
-我们继续看代码，*nm.DefaultNewNode*的定义是：
-
-```go
-func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
-    // Generate node PrivKey
-    nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
-    if err != nil {
-        return nil, err
-    }
-    return NewNode(config,
-        privval.LoadOrGenFilePV(config.PrivValidatorFile()),
-        nodeKey,              
-        proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
-        DefaultGenesisDocProviderFunc(config),
-        DefaultDBProvider,    
-        DefaultMetricsProvider(config.Instrumentation),
-        logger,
-    )
+    // services
+    eventBus         *types.EventBus // pub/sub for services                                                                                                                                     
+    stateDB          dbm.DB
+    blockStore       *bc.BlockStore         // store the blockchain to disk
+    bcReactor        *bc.BlockchainReactor  // for fast-syncing
+    mempoolReactor   *mempl.MempoolReactor  // for gossipping transactions 
+    consensusState   *cs.ConsensusState     // latest consensus state
+    consensusReactor *cs.ConsensusReactor   // for participating in the consensus
+    evidencePool     *evidence.EvidencePool // tracking evidence
+    proxyApp         proxy.AppConns         // connection to the application
+    rpcListeners     []net.Listener         // rpc servers
+    txIndexer        txindex.TxIndexer
+    indexerService   *txindex.IndexerService
+    prometheusSrv    *http.Server                                                                                                                                                                
 }  
 ```
 
-这是个函数的定义，`nodeFunc := nm.DefaultNewNode`也就意味着*nodeFunc*是个函数变量，从c/c++的角度来说首先要声明*nodeFunc*为一个函数指针然后再赋值，而在go里面就这样。
+显然这是个服务的定义，其中的许多字段本身也是服务，我们会逐个研究。
 
-接下来我们看*NewRunNodeCmd*:
+### NewNode()函数
 
-```go
-func NewRunNodeCmd(nodeProvider nm.NodeProvider) *cobra.Command {
-    cmd := &cobra.Command{    
-        Use:   "node",        
-        Short: "Run the tendermint node",
-        RunE: func(cmd *cobra.Command, args []string) error {
-            n, err := nodeProvider(config, logger)
-            if err != nil {   
-                return fmt.Errorf("Failed to create node: %v", err)
-            }                 
-    
-            // Stop upon receiving SIGTERM or CTRL-C
-            c := make(chan os.Signal, 1)   
-            signal.Notify(c, os.Interrupt, syscall.SIGTERM) 
-            go func() {
-                for sig := range c {           
-                    logger.Error(fmt.Sprintf("captured %v, exiting...", sig))
-                    if n.IsRunning() {             
-                        n.Stop()                       
-                    }
-                    os.Exit(1)
-                }
-            }()
-
-            if err := n.Start(); err != nil { 
-                return fmt.Errorf("Failed to start node: %v", err)
-            }
-            logger.Info("Started node", "nodeInfo", n.Switch().NodeInfo())
-
-            // Run forever
-            select {}
-
-            return nil
-        },
-    }
-
-    AddNodeFlags(cmd)
-    return cmd
-}
-```
-
-很直白，主要工作是构造并返回一个*cobra.Command*对象的指针，另外就是`AddNodeFlags(cmd)`，给node命令增加些标志或者参数，这个函数细节暂时不深究。
-
-这里必须要跟C/C++做个比较，在C/C++中调用*malloc*或者*new*函数来分配对象的存储空间，并且在将来要记得*free*或者*delete*，而在go中创建对象就像上面代码这么做就可以了，将来也不需要手工回收空间，go是有垃圾收集机制的，而且虽然这看上去像是个局部变量，在go中也不必担心这个问题。
-
-最后就是开始执行命令：
+当然第一步是创建一个node。在*DefaultNewNode(config \*cfg.Config, logger log.Logger)*函数中，是这样调用*NewNode()*的：
 
 ```go
-	cmd := cli.PrepareBaseCmd(rootCmd, "TM", os.ExpandEnv(filepath.Join("$HOME", cfg.DefaultTendermintDir)))
-	if err := cmd.Execute(); err != nil {
-		panic(err)
-	}
-}
-```
-注意这里的*cmd*跟前面的*cmd*已经不是一回事，因为：
-```go
-func PrepareBaseCmd(cmd *cobra.Command, envPrefix, defaultHome string) Executor { 
-    cobra.OnInitialize(func() { initEnv(envPrefix) })
-    cmd.PersistentFlags().StringP(HomeFlag, "", defaultHome, "directory for config and data")
-    cmd.PersistentFlags().Bool(TraceFlag, false, "print out full stack trace on errors")
-    cmd.PersistentPreRunE = concatCobraCmdFuncs(bindFlagsLoadViper, cmd.PersistentPreRunE)
-    return Executor{cmd, os.Exit}  
-}  
+NewNode(config,    
+     privval.LoadOrGenFilePV(config.PrivValidatorFile()),                                                                                                                                     
+     nodeKey, 
+     proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),                                                                                                                
+     DefaultGenesisDocProviderFunc(config),
+     DefaultDBProvider,
+     DefaultMetricsProvider(config.Instrumentation),                                                                                                                             
+     logger,
+ )           
 ```
 
-而：
+注意logger参数后面那个逗号，go中是允许的，这并不是个错误。
 
-```go
-type Executor struct {
-    *cobra.Command
-    Exit func(int) // this is os.Exit by default, override in tests
-}
-```
+其对应的函数签名是
 
-**不是太明白为什么这里要继续使用*cmd*这个名字，大概是作者的恶趣味吧。**
-
-*cmd.Execute()*实际上就是
-
-## cli.Execute()
-
-```go
-func (e Executor) Execute() error {
-    e.SilenceUsage = true     
-    e.SilenceErrors = true    
-    err := e.Command.Execute()
-    ...
-    return err
-}                
-```
-
-并没有多少东西，除了这一句`err := e.Command.Execute()`，我们上面已经看到了，这里饶了一个圈，又回头执行Command去了，到这里为止，我们知道这个Command就是rootCmd。于是
-
-## cobra.Execute()
-
-```go
-func (c *Command) Execute() error {
-    _, err := c.ExecuteC()    
-    return err
-}  
-```
-
-继续绕圈
-
-## cobra.ExecuteC()
-
-```go
-func (c *Command) ExecuteC() (cmd *Command, err error) {
-    // Regardless of what command execute is called on, run on Root only
-    if c.HasParent() {
-        return c.Root().ExecuteC() 
-    }
-```
-当然，这里我们知道rootCmd是没有父命令的，所以往下看
-```go
-// windows hook
-    if preExecHookFn != nil { 
-        preExecHookFn(c)      
-    }
-   
-    // initialize help as the last point possible to allow for user
-    // overriding
-    c.InitDefaultHelpCmd()
-```
-到这里对理解流程是无关紧要的，我们先不管它。
-```go
-    var args []string
-
-    // Workaround FAIL with "go test -v" or "cobra.test -test.v", see #155
-    if c.args == nil && filepath.Base(os.Args[0]) != "cobra.test" {
-        args = os.Args[1:]
-    } else {
-        args = c.args
-    }
-```
-保证args是除了程序名字也就是tendermint之外剩下的命令行参数。
-```go
-    var flags []string
-    if c.TraverseChildren {
-        cmd, flags, err = c.Traverse(args)
-    } else {
-        cmd, flags, err = c.Find(args)
-    }
-    if err != nil {
-        // If found parse to a subcommand and then failed, talk about the subcommand
-        if cmd != nil {
-            c = cmd
-        }
-        if !c.SilenceErrors {
-            c.Println("Error:", err.Error())
-            c.Printf("Run '%v --help' for usage.\n", c.CommandPath())
-        }
-        return c, err
-    }
-```
-以上找到子命令，比方说*init*,*node*以及对应这些子命令的参数列表，然后就是执行这个子命令
-```go
-    err = cmd.execute(flags)
-    ...
-    return cmd, err
-}
-
-```
-
-于是我们到达了问题的核心
-
-## cobra.execute(a []string) (err error)
-
-这个函数事实上是一条命令的执行的流程，就不细说了，出于我们的目的，只看跟*node*这条命令有关的部分。前面我们看到，在定义*node*的时候定义了一个函数变量*RunE*，这个函数变量对应的函数会在*execute*执行过程中调用，所以，我们只要看*RunE*所代表的那个函数
-
-## commands.NewRunNodeCmd.RunE
-
-```go
-RunE: func(cmd *cobra.Command, args []string) error {
-            n, err := nodeProvider(config, logger)
-            ...
-            if err := n.Start(); err != nil { 
-                return fmt.Errorf("Failed to start node: %v", err)
-            }
-            logger.Info("Started node", "nodeInfo", n.Switch().NodeInfo())
-
-            // Run forever
-            select {}
-
-            return nil
-        },
-    }
-```
-
-这里我们有两个函数需要关注的，一个是*nodeProvider*，一个是*Start*，而*nodeProvider*正是前面我们已经见过的*DefaultNewNode*,
-
-### DefaultNewNode
-
-```go
-func DefaultNewNode(config *cfg.Config, logger log.Logger) (*Node, error) {
-    // Generate node PrivKey
-    nodeKey, err := p2p.LoadOrGenNodeKey(config.NodeKeyFile())
-    if err != nil {
-        return nil, err
-    }
-    return NewNode(config,
-        privval.LoadOrGenFilePV(config.PrivValidatorFile()),
-        nodeKey,              
-        proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir()),
-        DefaultGenesisDocProviderFunc(config),
-        DefaultDBProvider,    
-        DefaultMetricsProvider(config.Instrumentation),
-        logger,
-    )
-}  
-```
-
-这个函数返回了一个新建的节点*n*。
-
-于是
-
-### n.Start()
-
-```go
-func (bs *BaseService) Start() error {
-    if atomic.CompareAndSwapUint32(&bs.started, 0, 1) {
-        if atomic.LoadUint32(&bs.stopped) == 1 {
-            bs.Logger.Error(fmt.Sprintf("Not starting %v -- already stopped", bs.name), "impl", bs.impl)                                                                                         
-            // revert flag    
-            atomic.StoreUint32(&bs.started, 0)
-            return ErrAlreadyStopped   
-        }
-        bs.Logger.Info(fmt.Sprintf("Starting %v", bs.name), "impl", bs.impl)                                                                                                                     
-        err := bs.impl.OnStart()       
-        if err != nil {       
-            // revert flag    
-            atomic.StoreUint32(&bs.started, 0)
-            return err        
-        }
-        return nil
-    }
-    bs.Logger.Debug(fmt.Sprintf("Not starting %v -- already started", bs.name), "impl", bs.impl)                                                                                                 
-    return ErrAlreadyStarted  
-}  
-```
-
-最终问题的关键就在*OnStart*和*NewNode*上，在研究这两个函数之前，我们先看个时序图，从整体上把握一下  
-## Tendermint 时序图
-
-```sequence
-note over main(): cmd/tendermint/main.go
-note over commands: cmd/tendermint/commands/root.go
-commands -> main(): rootCmd <- RootCmd
-note over cobra: spf13/cobra/command.go
-main() -> cobra: rootCmd.AddCommand(...)
-note over node:node/node.go
-node -> main(): nodeFunc <- DefaultNewNode 
-note over commands:cmd/tendermint/commands/run_node.go
-main()->commands:NewRunNodeCmd(nodeFunc)
-commands->main():返回一个note命令
-main()->cobra:rootCmd.AddCommand(note命令)
-note over cli:libs/cli/setup.go
-main()->cli:PrepareBaseCmd(rootCmd)
-cli->main():cmd<-Executor{rootCmd, os.Exit}
-main()->cli:cmd.Execute()
-cli->cobra:Execute():rootCmd
-cobra->cobra:ExecuteC():rootCmd
-note over cobra:找到子命令及其参数->cmd:node
-cobra->cobra:cmd.execute():node
-note over commands:run_node.go
-cobra->commands:RunE
-commands->node:DefaultNewNode()
-node->node:NewNode()
-node->commands:n<-NewNode
-note over common:libs/common/service.go 
-commands->common:n.Start()
-common->node:OnStart()
-note over node:就到这，在OnStart函数里边启动了一系列命令
-```
-我们先看
-## NewNode()
 ```go
 // NewNode returns a new, ready to go, Tendermint Node.
 func NewNode(config *cfg.Config,
@@ -414,11 +78,12 @@ func NewNode(config *cfg.Config,
 	genesisDocProvider GenesisDocProvider,
 	dbProvider DBProvider,
 	metricsProvider MetricsProvider,
-	logger log.Logger) (*Node, error) {
+	logger log.Logger) (*Node, error) 
 ```
-上面这部分我们不管它，往下看
 
-###BlockStore
+在接下来的讨论中我们会说明这些参数是什么。
+
+除去两条打印语句，接下来马上就是
 
 ```go
 	// Get BlockStore
@@ -426,33 +91,36 @@ func NewNode(config *cfg.Config,
 	if err != nil {
 		return nil, err
 	}
-	blockStore := bc.NewBlockStore(blockStoreDB)
 ```
-这里创建了一个数据库
-*dbProvider*是什么呢：
-
-#### dbProvider
-
+显然这里创建了一个数据库，这里*dbProvider*类型是*DBProvider*，其值是*DefaultDBProvider*。其定义都在*node.go*文件中。
 ```go
-// DBContext specifies config information for loading a new DB.
-type DBContext struct {
-    ID     string
-    Config *cfg.Config
-}  
-   
 // DBProvider takes a DBContext and returns an instantiated DB.
 type DBProvider func(*DBContext) (dbm.DB, error)
-   
 // DefaultDBProvider returns a database using the DBBackend and DBDir
 // specified in the ctx.Config.
 func DefaultDBProvider(ctx *DBContext) (dbm.DB, error) {
     dbType := dbm.DBBackendType(ctx.Config.DBBackend)
     return dbm.NewDB(ctx.ID, dbType, ctx.Config.DBDir()), nil
 }  
+// DBContext specifies config information for loading a new DB.
+type DBContext struct {
+    ID     string
+    Config *cfg.Config
+} 
 ```
-没错，就是这个*DefaultDBProvider*，这是在*DefaultNewNode*函数里调用*NewNode*时传入的参数。这个函数最后返回一个由*NewDB*创建的名字是*ctx.ID*,位于*ctx.Config.DBDir()*目录的数据库，我们知道tendermint使用的是levelDB。
+注释已经说明它们是干什么的了，就不再啰嗦，只不过我们要知道tendermint缺省使用的数据库是levelDB。
 
-##### NewDB
+dbm是*github.com/tendermint/tendermint/libs/db*的别名。
+
+注意*DBBackendType(ctx.Config.DBBackend)*，因为
+
+```go
+type DBBackendType string
+```
+
+这里自定义了一个类型，*`DBBackendType(ctx.Config.DBBackend)`*是类型转换，*ctx.Config.DBBackend*按定义是个string。注意跟C语言类型转换句法的区别。
+
+###### NewDB
 
 ```go
 func NewDB(name string, backend DBBackendType, dir string) DB {
@@ -480,7 +148,7 @@ func NewDB(name string, backend DBBackendType, dir string) DB {
 而*DBBackendType*则是：
 
 ```go
-type DBBackendType string
+
 const (
     LevelDBBackend   DBBackendType = "leveldb" // legacy, defaults to goleveldb unless +gcc
     CLevelDBBackend  DBBackendType = "cleveldb"
@@ -501,7 +169,9 @@ func registerDBCreator(backend DBBackendType, creator dbCreator, force bool) {
 ```
 总之我们创建了一个名字叫做*blockstore*，以及如下的一个叫*state*的的levelDB数据库：
 
-### State
+​	blockStore := bc.NewBlockStore(blockStoreDB)
+
+#### State
 
 ```go
 	// Get State
@@ -532,7 +202,7 @@ func registerDBCreator(backend DBBackendType, creator dbCreator, force bool) {
 		return nil, err
 	}
 ```
-### proxyApp
+#### proxyApp
 
 我们知道，tendermint启动一个节点有两种方式，一个是在启动*node*时带有*--proxy_app=kvstore*参数，这时候会启动内置的*kvstore*这个*ABCI APP*并与之建立三个连接(*consensus, mempool, query*)，一个是没有这个参数，那么就必须另外启动一个指定地址和端口的*ABCI APP*，所谓指定，指的是在配置文件里边设置好，再启动tendermint时，同样会建立同上的三个连接。
 
@@ -546,7 +216,7 @@ func registerDBCreator(backend DBBackendType, creator dbCreator, force bool) {
 ```
 *NewAppConns*要做什么呢？不过我们还是先看*clientCreator*，从*NewNode*的参数列表中我们可以看到这是一个*proxy.ClientCreator*
 
-#### clientCreator
+##### clientCreator
 
 ```go
 type ClientCreator interface {
@@ -615,7 +285,7 @@ func (r *remoteClientCreator) NewABCIClient() (abcicli.Client, error) {
 
 知道clientCreator是什么之后，我们再来看*NewAppConns*
 
-#### NewAppConns
+##### NewAppConns
 
 ```go
 func NewAppConns(clientCreator ClientCreator) AppConns {
@@ -674,11 +344,11 @@ Query() AppConnQuery
 
 这里必须要提醒的是在实现接口的函数时，其接收者尽可能用指针的形式，正如在C++中的多态也总是由类指针来实现，虽然其中的原理表面上是不一样的，但是归根结底，总还是可以归结到C++中为什么要使用指针的原理上。
 
-#### proxyApp.Start()
+##### proxyApp.Start()
 
 事实上这个函数我们可以不用关注，而只要实现*proxyApp*的*OnStart()*即可，换句话说就是*multiAppConn*实现了接口*AppConns*，也进而实现了*cmn.Service*。
 
-##### OnStart()
+###### OnStart()
 
 ```go
 func (app *multiAppConn) OnStart() error {
@@ -756,7 +426,7 @@ RETRY_LOOP:
 
 这个函数很直白，如果*mustConnect==false*，这是缺省情况，就会一直尝试连接指定的*ABCI App*，或者说，节点和App的启动顺序是没有关系的。连接上了之后，就会启动两个线程：`cli.sendRequestsRoutine(conn)`和`cli.recvResponseRoutine(conn)`，这两个线程的细节就不说了，分别用于发送和接收数据。
 
-###### NewAppConnXXXX
+####### NewAppConnXXXX
 
 ```go
 type appConnQuery struct {    
@@ -792,7 +462,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 
 很直白，就是分别保存了前面建立的3个连接。
 
-### NewHandshaker
+#### NewHandshaker
 
 ```go
 
@@ -805,7 +475,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 		return nil, fmt.Errorf("Error during handshake: %v", err)
 	}
 ```
-###  LoadState
+####  LoadState
 ```go
 	// Reload the state. It will have the Version.Consensus.App set by the
 	// Handshake, and may have other modifications as well (ie. depending on
@@ -822,7 +492,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 		)
 	}
 ```
-### ValidatorSocketClient
+#### ValidatorSocketClient
 ```go
 	if config.PrivValidatorListenAddr != "" {
 		// If an address is provided, listen on the socket for a connection from an
@@ -851,11 +521,11 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 		consensusLogger.Info("This node is not a validator", "addr", privValidator.GetAddress(), "pubKey", privValidator.GetPubKey())
 	}
 ```
-### metrics
+#### metrics
 ```go
 	csMetrics, p2pMetrics, memplMetrics, smMetrics := metricsProvider()
 ```
-### mempool
+#### mempool
 ```go
 	// Make MempoolReactor
 	mempool := mempl.NewMempool(
@@ -878,7 +548,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 		mempool.EnableTxsAvailable()
 	}
 ```
-### evidence
+#### evidence
 ```go
 	// Make Evidence Reactor
 	evidenceDB, err := dbProvider(&DBContext{"evidence", config})
@@ -892,7 +562,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	evidenceReactor := evidence.NewEvidenceReactor(evidencePool)
 	evidenceReactor.SetLogger(evidenceLogger)
 ```
-### blockchain
+#### blockchain
 ```go
 	blockExecLogger := logger.With("module", "state")
 	// make block executor for consensus and blockchain reactors to execute blocks
@@ -909,7 +579,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	bcReactor := bc.NewBlockchainReactor(state.Copy(), blockExec, blockStore, fastSync)
 	bcReactor.SetLogger(logger.With("module", "blockchain"))
 ```
-###  Consensus
+####  Consensus
 ```go
 	// Make ConsensusReactor
 	consensusState := cs.NewConsensusState(
@@ -935,7 +605,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	// consensusReactor will set it on consensusState and blockExecutor
 	consensusReactor.SetEventBus(eventBus)
 ```
-### Transaction indexing
+#### Transaction indexing
 ```go
 	// Transaction indexing
 	var txIndexer txindex.TxIndexer
@@ -959,7 +629,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 	indexerService := txindex.NewIndexerService(txIndexer, eventBus)
 	indexerService.SetLogger(logger.With("module", "txindex"))
 ```
-### p2p
+#### p2p
 ```go
 	var (
 		p2pLogger = logger.With("module", "p2p")
@@ -1030,7 +700,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 
 	p2p.MultiplexTransportConnFilters(connFilters...)(transport)
 ```
-### switch
+#### switch
 ```go
 	// Setup Switch.
 	sw := p2p.NewSwitch(
@@ -1088,7 +758,7 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 		}()
 	}
 ```
-### return
+#### return
 ```go
 	node := &Node{
 		config:        config,
@@ -1119,7 +789,5 @@ func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
 ```
 节点有了，接下来看看启动的时候会怎么样
 
-## node.OnStart()
-
-好吧，其实也没什么特别可说的，就是启动了一些服务。
+### OnStart()
 
