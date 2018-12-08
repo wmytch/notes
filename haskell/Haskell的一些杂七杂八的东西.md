@@ -229,7 +229,14 @@ $$
 average:Float \to average' \\
 average':Float \to Float
 $$
-$average$和$average’$分别是两个数学意义上的映射。
+$average$和$average’$分别是两个数学意义上的映射。或者
+
+```haskell
+average':Float -> Float
+average:Float -> average'
+```
+
+如果不支持LaTeX的话。
 
 这种每次绑定一个参数，然后返回一个新函数的处理称之为柯里化，haskell中所有的函数都是这样处理的，缺省情况下。
 
@@ -306,11 +313,11 @@ average 6.9 7.25
 
   `show “hello，world”`的结果会是`“\”hello,world\””`。
 
-- 只有Num类型(Float, Double, Int, Integer)可以进行`(+), (-), (*)`运算。
+- 只有Float、Double、Int、Integer可以进行`+, -, *`运算。
 
-- 只有Integral类型(Int , Integer )可以做`div, mod`运算。
+- 只有Int、Integer可以做`div, mod`运算。
 
-- 只有Float和Double(同时属于Fractional和Floating类型)和可以做`/`运算以及数学函数运算。
+- 只有Float、Double可以做`/`运算以及数学函数运算。
 
 ### Fundamentals
 
