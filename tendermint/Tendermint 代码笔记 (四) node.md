@@ -1,4 +1,4 @@
-# Tendermint 代码笔记 (三) node
+# Tendermint 代码笔记 (四) node
 
 [TOC]
 node命令实现了Tendermint core的内容，正如之前讨论过的，包括两个部分，命令和服务，命令指的是node这个命令本身，服务指在node中提供的服务。我们分别讨论。
