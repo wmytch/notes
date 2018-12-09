@@ -319,5 +319,143 @@ average 6.9 7.25
 
 - 只有Float、Double可以做`/`运算以及数学函数运算。
 
+- typeclass必要时可以组合使用，比如：
+
+  ```go
+  signum :: (Ord a, Num a) => a -> Int
+  signum x = if x < 0 then -1 else if x == 0 then 0 else 1
+  ```
+
+  `a -> Int`改成`a -> a`也是可以的，不过这个函数对于负数会有这样的问题：
+
+  ```haskell
+  *Test> signum1 (-1)
+  -1
+  *Test> signum1 (0-1)
+  -1
+  *Test> signum1 0-1
+  -1
+  *Test> signum1 2-5
+  -4
+  *Test> signum1 (2-5)
+  -1
+  *Test> signum1 -5
+  
+  <interactive>:46:1: error:
+  ```
+
+  至于最后那个error是什么，无关紧要，反正是有错误发生。原因应该是`-`这个运算符会有歧义，具体的将来再说吧。
+
+- 句法上，Typeclass所在的位置必须是Typeclass，不能是具体的类型名字，比如上面的`(Ord a, Num a) `改成`(Ord a, Int a) `是不行的。
+
 ### Fundamentals
+
+#### module 
+
+句法：
+
+```haskell
+module Simple
+where
+--module body
+```
+
+`where`放第一行也是可以的。module名字首字母必须**大写**。
+
+#### 分支
+
+也就是*if .. then .. else ..*及其各种变形
+
+```haskell
+signum :: (Ord a, Num a) => a -> Int
+signum x = if x < 0 then -1 else if x == 0 then 0 else 1
+
+signum :: (Ord a, Num a) => a -> Int
+signum x | x <  0  = -1
+         | x == 0  = 0
+         | x >  0  = 1
+         
+signum :: (Ord a, Num a) => a -> Int
+signum x | x <  0     = -1
+         | x == 0     = 0
+         | otherwise  = 1
+```
+
+以上3个*signum*是等价的，也同样在`x<0`的时会有一些问题。
+
+#### Binders
+
+所谓绑定，理解为固定赋值就好了，与赋值不同的是绑定之后就不能再变了，所以叫绑定而不是赋值。
+
+可以把一个值绑定到一个标识符，这个通常叫常量了
+
+```haskell
+pi :: Floating a => a
+pi = 3.141592653589793
+```
+
+这是所谓全局绑定，还有局部绑定
+
+```haskell
+circleArea' :: Floating a => a -> a
+circleArea' diameter  = pi * radius * radius
+  where
+    radius = diameter / 2.0       -- local binding
+```
+
+这里circleArea’是个全局绑定的名字，而radius则只限于这个函数当中。
+
+对于绑定本身没有什么特别的，只是要注意作用范围内，绑定不可更改。
+
+#### (形参)多态函数
+
+看例子
+
+```haskell
+fst :: (a, b) -> a
+fst (x, y)  = x
+
+snd :: (a, b) -> b
+snd (x, y)  = y
+```
+
+这里没有类型签名，因为，fst和snd都不对参数进行运算，所以不用管参数的类型是什么，a，b的类型甚至可以不一样。这种函数叫**(形参)多态函数**
+
+#### 元组
+
+还是看例子
+
+```haskell
+type Point = (Int, Int)
+origin :: Point
+origin  = (0, 0)
+
+moveRight :: Point -> Int -> Point
+moveRight (x, y) distance  = (x + distance, y)
+
+moveUp :: Point -> Int -> Point
+moveUp (x, y) distance  = (x, y + distance)
+```
+注意一下*type*的定义方式，以及*origin*的绑定方式，也就是直接赋了一个值。
+
+以及
+
+```haskell
+type Colour = String
+type ColourPoint = (Int, Int, Colour)
+origin :: Colour -> ColourPoint
+origin colour  = (0, 0, colour)
+
+move :: ColourPoint -> Int -> Int -> ColourPoint
+move (x, y, colour) xDistance yDistance  
+  = (x + xDistance, y + yDistance, colour)
+
+distance :: ColourPoint -> ColourPoint -> Float
+distance (x1, y1, colour1) (x2, y2, colour2) 
+  = sqrt (fromIntegral (dx * dx + dy * dy))
+  where
+    dx = x2 - x1
+    dy = y2 - y1
+```
+这里*origin*是个函数，而不是前面那个例子的常量或者说变量。*where*后面是局部绑定，不是*SQL*的条件，更不是*while*。
 

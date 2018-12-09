@@ -17,7 +17,7 @@ import (
 	nm "github.com/tendermint/tendermint/node"
 )
 ~~~
-上面这一段就不说了，一看就明白，不过要注意的是在这些导入的包中，如果有*init()*函数，那么会在*main()*函数之前执行。
+上面这一段就不说了，一看就明白，不过要注意的是在这些导入的包中，如果有 *init()* 函数，那么会在 *main()* 函数之前执行。
 在研究main函数之前，我们需要看看文档里边运行tendermint的命令：
 
 ```bash
