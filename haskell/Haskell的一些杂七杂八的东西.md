@@ -459,3 +459,190 @@ distance (x1, y1, colour1) (x2, y2, colour2)
 ```
 这里*origin*是个函数，而不是前面那个例子的常量或者说变量。*where*后面是局部绑定，不是*SQL*的条件，更不是*while*。
 
+### error
+
+*Prelude*包中有个*error*函数：
+
+```haskell
+error :: String -> a
+```
+
+那个*a*表示什么类型都有可能，因为不用对*a*进行运算，所以不需要知道其类型，也就不用类型签名了。
+
+这个函数可以理解为抛出异常并打印一段提示：
+
+```haskell
+error "encountered a fatal error"  ⇒  ** Exception: encountered a fatal error
+```
+
+
+
+## 递归
+
+### 计算
+
+```haskell
+natSum :: Num a => a -> a
+natSum 0  = 0                    
+natSum n  = n + natSum (n - 1) 
+```
+
+和
+
+```haskell
+natSum :: Num a => a -> a
+natSum n = if n == 0 
+              then 0 
+              else n + natSum (n - 1)
+```
+
+是一样的。不过这两种定义，在n<0时是不会终止的，也就是说这是个*partial*函数。
+
+所以需要这样定义
+
+```haskell
+natSum :: (Num a, Ord a) => a -> a
+natSum 0              = 0
+natSum n  | n > 0     = n + natSum (n - 1) 
+          | otherwise = error "natSum: Input value too small!"
+```
+
+### List
+
+```haskell
+repeatN :: Int -> a -> [a]
+repeatN 0 x  = []
+repeatN n x  = x : repeatN (n - 1) x
+```
+
+这里递归生成了一个所有元素都相同的列表。
+
+```haskell
+suffixes :: String -> [String]
+suffixes ""  = []
+suffixes str = str : suffixes (tail str)
+```
+
+比方说：
+
+> ```haskell
+> suffixes "Hello"`  ⇒  `["Hello", "ello", "llo", "lo", "o"]
+> ```
+
+### *nil* 和 *cons*
+
+*nil*：`[]`
+
+*cons*: `:`
+
+这两个运算符就可以构造任意的列表了。
+
+比方说
+
+```haskell
+[x1, x2,… , xn] = (x1 : (x2 : ⋯ : (xn : [])⋯)
+```
+
+实际上，后面的`()`里边的递归形式的表示方式是列表的原始方式，`[]`表达方式只是一种便利。
+
+所以我们可以这样表示两个函数
+
+```haskell
+head :: [a] -> a
+head (x:xs) = x
+
+tail :: [a] -> [a]
+tail (x:xs) = xs
+```
+
+当然我们知道这两个函数是*partial functions*，因为没有处理空列表的情况。
+
+### 映射：操作列表元素
+
+```haskell
+allSquares :: Num a => [a] -> [a]
+allSquares []       = []
+allSquares (x : xs) = x * x : allSquares xs
+```
+
+> ```haskell
+> allSquares [x1, x2,… , xn]` = `[x1 * x1, x2 * x2,… , xn * xn]
+> ```
+
+```haskell
+import Data.Char 
+
+allToUpper :: String -> String
+allToUpper []                 = []
+allToUpper (chr : restString) = toUpper chr : allToUpper restString
+```
+
+> ```haskell
+> allToUpper "can you hear me now?`  ⇒  `"CAN YOU HEAR ME NOW?"
+> ```
+
+要记得列表的`(x:xs)`这种表示方式。以及，*String*本身是个列表。
+
+此外，最关键的是这种模式：
+
+```haskell
+recursiveFunction []       = []
+recursiveFunction (x : xs) = doSomethingWith x : recursiveFunction xs
+```
+
+再看一个例子
+
+```haskell
+distancesFromPoint :: ColourPoint -> [ColourPoint] -> [Float]
+distancesFromPoint point []
+  = []
+distancesFromPoint point (p : ps)
+  = distance point p : distancesFromPoint point ps
+```
+
+计算一个点与一组点之间的距离。*ColourPoint*和*distance*的定义在前面。
+
+### 过滤：移除列表元素
+
+```haskell
+import Data.Char
+
+extractDigits :: String -> String
+extractDigits []
+  = []
+extractDigits (chr : restString)
+  | isDigit chr = chr : extractDigits restString
+  | otherwise   =       extractDigits restString
+```
+
+> ```haskell
+> extractDigits "das43 dffe 23 5 def45" => "4323545"
+> ```
+
+以及
+
+```haskell
+inRadius :: ColourPoint -> Float -> [ColourPoint] -> [ColourPoint]
+inRadius point radius []
+  = []
+inRadius point radius (p : ps)
+  | distance point p <= radius = p : inRadius point radius ps
+  | otherwise                  =     inRadius point radius ps
+```
+
+相当于指定一个圆心为point半径为radius的圆，找出列表中所有位于圆内或者圆上的点。
+
+### Reductions: combining the elements of a list
+
+不确定标题该怎么翻译，意思就是通过对列表元素的一些组合或者合并操作实现缩减。
+
+比如
+
+```haskell
+product :: Num a => [a] -> a
+product []     = 1
+product (x:xs) = x * product xs
+```
+
+当然这是递归，只不过与前面不同的是在空表是返回1，而不是0。
+
