@@ -326,25 +326,25 @@ average 6.9 7.25
   signum x = if x < 0 then -1 else if x == 0 then 0 else 1
   ```
 
-  `a -> Int`改成`a -> a`也是可以的，不过这个函数对于负数会有这样的问题：
+  `a -> Int`改成`a -> a`也是可以的，不过这个函数要注意下面的问题：
 
   ```haskell
-  *Test> signum1 (-1)
+  *Test> signum (-1)
   -1
-  *Test> signum1 (0-1)
+  *Test> signum (0-1)
   -1
-  *Test> signum1 0-1
+  *Test> signum 0-1
   -1
-  *Test> signum1 2-5
+  *Test> signum 2-5
   -4
-  *Test> signum1 (2-5)
+  *Test> signum (2-5)
   -1
-  *Test> signum1 -5
+  *Test> signum -5
   
   <interactive>:46:1: error:
   ```
 
-  至于最后那个error是什么，无关紧要，反正是有错误发生。原因应该是`-`这个运算符会有歧义，具体的将来再说吧。
+  这里主要是提醒注意signum是函数，`-`也是，而且`-`不但是二元减法运算符，也是一元取负运算符，并且他们仨的优先级相同，而函数调用是左结合的，这样就能理解上面的执行结果了。
 
 - 句法上，Typeclass所在的位置必须是Typeclass，不能是具体的类型名字，比如上面的`(Ord a, Num a) `改成`(Ord a, Int a) `是不行的。
 
