@@ -81,14 +81,102 @@ func initFiles(cmd *cobra.Command, args []string) error {
 
 而正如我们已经讨论过的，***node*这条命令中的服务就是在其*RunE*中启动的。**
 
+在讲主流程的时候我们已经看到了
+
+### PrepareBaseCmd
+
+```go
+func PrepareBaseCmd(cmd *cobra.Command, envPrefix, defaultHome string) Executor { 
+    cobra.OnInitialize(func() { initEnv(envPrefix) })
+    cmd.PersistentFlags().StringP(HomeFlag, "", defaultHome, "directory for config and data")
+    cmd.PersistentFlags().Bool(TraceFlag, false, "print out full stack trace on errors")
+    cmd.PersistentPreRunE = concatCobraCmdFuncs(bindFlagsLoadViper, cmd.PersistentPreRunE)
+    return Executor{cmd, os.Exit}  
+}  
+```
+
+这个函数实际上整个程序的初始化函数，包括但不限于读取配置文件。
+
+```go
+cobra.OnInitialize(func() { initEnv(envPrefix) })
+
+func OnInitialize(y ...func()) {
+    initializers = append(initializers, y...)
+}  
+```
+
+显然，这里是设置了一些初始化函数，这些初始化函数会在*preRun*函数里依次执行，注意是*preRun*，不是*PreRun*。如前所述，可以参见command.go里的`func (c *Command) execute(a []string) (err error)`，就不细说了。
+
+接下来我们再看
+
+```go
+cmd.PersistentPreRunE = concatCobraCmdFuncs(bindFlagsLoadViper, cmd.PersistentPreRunE)
+```
+
+这里发生了什么呢？我们知道这时候的cmd就是RootCmd，而我们在初始化RootCmd的时候已经申明了一个PersistentPreRunE，而这里又重新给PersistentPreRunE赋了一个值，当然要记得这时候还没有开始执行RootCmd。显然，concatCobraCmdFuncs这个名字已经提示了我们这里只是把两个函数连接起来，怎么连接的呢，且看
+
+```go
+func concatCobraCmdFuncs(fs ...cobraCmdFunc) cobraCmdFunc {
+    return func(cmd *cobra.Command, args []string) error {
+        for _, f := range fs {
+            if f != nil {
+                if err := f(cmd, args); err != nil {
+                    return err
+                }
+            }
+        }
+        return nil
+    }
+}
+```
+
+这里需要注意的是
+
+- 可变参数列表(fs ...cobraCmdFunc)在调用这个函数的时候就已经确定并且被闭包锁捕获，也就是两个函数变量*bindFlagsLoadViper*和*cmd.PersistentPreRunE*，不存在将来执行PersistentPreRunE时才确定fs是什么的问题。
+
+- RootCmd初始化时定义的PersistentPreRunE是存在于内存中并且可被寻址的，不然就无从作为argument传入。
+
+于是，这个函数就成为rootCmd的新的PersistentPreRunE将来被调用。
+
+接下来看
+
+```go
+func bindFlagsLoadViper(cmd *cobra.Command, args []string) error {
+    // cmd.Flags() includes flags from this command and all persistent flags from the parent
+    if err := viper.BindPFlags(cmd.Flags()); err != nil {
+        return err
+    }
+
+    homeDir := viper.GetString(HomeFlag)
+    viper.Set(HomeFlag, homeDir)   
+    viper.SetConfigName("config")                         // name of config file (without extension)
+    viper.AddConfigPath(homeDir)                          // search root directory       
+    viper.AddConfigPath(filepath.Join(homeDir, "config")) // search root directory /config
+       
+    // If a config file is found, read it in.
+    if err := viper.ReadInConfig(); err == nil {
+        // stderr, so if we redirect output to json file, this doesn't appear
+        // fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+    } else if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+        // ignore not found error, return other errors
+        return err
+    }                         
+    return nil
+}
+
+
+```
+
+如前面所说，读取了配置文件，但这并不意味着配置就生效了，而是要到在*PersistentPreRunE()*中调用到*ParseConfig()*时才会真正对配置进行解析。
+
 ## 服务 Service
 
 说完命令，我们讨论服务。以BlockPool为例
 
-```go
+​```go
 type BlockPool struct {
-    cmn.BaseService
-    startTime time.Time
+​    cmn.BaseService
+​    startTime time.Time
 
     mtx sync.Mutex
     // block requests         
@@ -97,17 +185,17 @@ type BlockPool struct {
     // peers
     peers         map[p2p.ID]*bpPeer
     maxPeerHeight int64       
-   
+       
     // atomic
     numPending int32 // number of requests pending assignment or block response                                                                                                                  
-   
+       
     requestsCh chan<- BlockRequest 
     errorsCh   chan<- peerError
 }  
 ```
 这里定义了一个*Service*，*BlockPool*，出于我们的目的，只需要关注*cmn.BaseService*，至于*cmn*，是*github.com/tendermint/tendermint/libs/common*的别名，我们且去看看*BaseService*的定义
 
-```go
+​```go
 type BaseService struct {
     Logger  log.Logger
     name    string

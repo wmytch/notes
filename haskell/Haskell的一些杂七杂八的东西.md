@@ -646,3 +646,43 @@ product (x:xs) = x * product xs
 
 当然这是递归，只不过与前面不同的是在空表是返回1，而不是0。
 
+## Higher-order Functions
+所谓*higer-order functions*就是那种用函数作为参数的函数，以及返回函数的函数，其实是很普通的概念。
+```haskell
+import Prelude hiding (map)
+
+map :: (a -> b) -> [a] -> [b]
+map f []       = []
+map f (x : xs) = f x : map f xs
+```
+
+注意第一行的hiding (map)。
+
+这里定义的map函数，有两个参数：*f* 和*(x:xs)*。从签名看，*f*代表一个函数*(a->b)*，*xs*是个List，要记得一个List的*(x:xs)*这种表达方式。并不是说会自动把*xs*拆分成*(x:xs)*，而是*xs*本身就是*(x:xs’)*，体会一下区别。递归的基本部分我们忽略，只看递归部分，这里就是说map的第一个参数，函数*f*，处理第二个参数List *xs*的队首，*xs*的队尾则继续递归。更进一步，就是*xs*的队首是函数*f*的参数。
+
+我们来看第一个例子
+
+```haskell
+allSquares :: Num a => [a] -> [a]
+allSquares xs = map square xs
+  where
+    square x = x * x
+```
+于是*square*以*xs*的队首元素为参数并返回其平方，而*xs*的队尾继续递归。
+
+第二个例子
+```haskell
+allToUpper :: String -> String
+allToUpper string = map toUpper string
+```
+于是*toUpper*以string的第一个字符为参数并将其转换成大写，string剩下的字符继续递归。
+
+再看一个复杂一些的
+```haskell
+distancesFromPoint :: ColourPoint -> [ColourPoint] -> [Float]
+distancesFromPoint point points = map distanceP points
+  where
+    distanceP :: ColourPoint -> Float
+    distanceP p = distance point p
+```
+这里就不说map的语义了。说复杂，并不是说map变得复杂，而是*distancesFromPoint*带了两个参数，第一个参数*point*并没有在map里边出现，而是出现在了*where*子句中*distanceP*的定义中，并且在其后的递归中保持不变，会变的只是map的第二个参数，那个**List**。

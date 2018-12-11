@@ -88,17 +88,17 @@ func DefaultConfig() *Config {
 
 这个函数就是设置了许多相关的缺省值，需要的话可以查阅源文件*github.com/tendermint/tendermint/config/config.go*。
 
-## Viper
-
-那么问题来了，到目前为止只是用缺省值初始化了一个Config对象，我们如果修改了配置文件，程序在哪里读取我们自定义的值呢？就在这里
+那么问题来了，到目前为止只是用缺省值初始化了一个Config对象，我们如果修改了配置文件，程序在怎样获取我们自定义的值呢？前面已经提到在初始化RootCmd的时候就已经读取了配置文件，但还没有解析，也就是配置还没有完全生效，只有就在这里
 
 >err := viper.Unmarshal(conf)
 
+才会解析配置文件，并使其生效。
+
 Viper是个应用配置系统，源文件在*github.com/spf13/viper*，跟cobra一样，都不是Tendermint自己的包。
 
-我们看看里边是怎么处理的。会涉及到反射，有一定难度。所以我们先简单了解下反射。
+我们不打算深究里边是怎么处理的。但是里边会涉及到反射，所以我们简单了解下反射。
 
-### 反射
+## 反射
 
 go语言中一个变量在反射中可以表示为一个二元组(Value,Type)，而*Value*又对应一个二元组*(Value,Type)*。
 
@@ -158,171 +158,7 @@ p := reflect.ValueOf(&x)
 v := p.Elem()
 v.SetFloat(7.1)
 ```
-这么多应该够了，如果不够再回头补，接下来看Unmarshal()函数。
-### Unmarshal()
 
-```go
-func Unmarshal(rawVal interface{}) error { return v.Unmarshal(rawVal) } 
-func (v *Viper) Unmarshal(rawVal interface{}) error {
-    err := decode(v.AllSettings(), defaultDecoderConfig(rawVal))
-   
-    if err != nil {
-        return err
-    }
-   
-    v.insensitiviseMaps() 
-   
-    return nil
-}  
-```
+了解这么多基本上已经够了。
 
-显然在*ParseConfig()*里面调用的是普通函数版本，而不是方法版本，当然这无关紧要。
-
-```go
-var v *Viper   
-func init() {
-    v = New()
-}  
-```
-
-一个全局变量*v*及其初始化，注意这里用的是`=`而不是`:=`，因为`v`已经申明为一个全局变量。先简单了解下普通函数版本里边的*v*是什么。
-
-```go
-type Viper struct {
-    // Delimiter that separates a list of keys
-    // used to access a nested value in one go
-    keyDelim string
-
-    // A set of paths to look for the config file in
-    configPaths []string
-
-    // The filesystem to read config from.
-    fs afero.Fs
-
-    // A set of remote providers to search for the configuration
-    remoteProviders []*defaultRemoteProvider
-
-    // Name of file to look for inside the path
-    configName string
-    configFile string
-    configType string
-    envPrefix  string
-
-    automaticEnvApplied bool
-    envKeyReplacer      *strings.Replacer
-
-    config         map[string]interface{}
-    override       map[string]interface{}
-    defaults       map[string]interface{}
-    kvstore        map[string]interface{}
-    pflags         map[string]FlagValue
-    env            map[string]string
-    aliases        map[string]string
-    typeByDefValue bool
-
-    onConfigChange func(fsnotify.Event)
-}
-
-func New() *Viper {
-    v := new(Viper)
-    v.keyDelim = "."
-    v.configName = "config"
-    v.fs = afero.NewOsFs()
-    v.config = make(map[string]interface{})
-    v.override = make(map[string]interface{})
-    v.defaults = make(map[string]interface{})
-    v.kvstore = make(map[string]interface{})
-    v.pflags = make(map[string]FlagValue)
-    v.env = make(map[string]string)
-    v.aliases = make(map[string]string)
-    v.typeByDefValue = false
-
-    return v
-}
-```
-
-构造一个对象的方法当然各种各样。这里我们又看到了一种。
-
-接下来调用的是方法版本，里边有两个函数，分别是
-
-> err := decode(v.AllSettings(), defaultDecoderConfig(rawVal))
->
-> v.insensitiviseMaps() 
-
-到这里颇为踌躇，到底应该深度优先还是广度优先呢？
-
-我们还是先看下这两个函数
-
-```go
-func decode(input interface{}, config *mapstructure.DecoderConfig) error{
-    decoder, err := mapstructure.NewDecoder(config)
-    if err != nil {
-        return err
-    }
-    return decoder.Decode(input)
-}
-
-func (v *Viper) insensitiviseMaps() {
-    insensitiviseMap(v.config)
-    insensitiviseMap(v.defaults)   
-    insensitiviseMap(v.override)   
-    insensitiviseMap(v.kvstore)    
-} 
-```
-
-两个函数都不复杂，并且是有前序关系的，我们就按顺序来看。
-
-先比较第一个函数的签名及调用语句：
-```go 
-func decode(input interface{}, config *mapstructure.DecoderConfig) error
-
-err := decode(v.AllSettings(), defaultDecoderConfig(rawVal))
-```
-
-先看*v.AllSettings()*
-
-```go
-// AllSettings merges all settings and returns them as a map[string]interface{}.
-func AllSettings() map[string]interface{} { return v.AllSettings() }
-func (v *Viper) AllSettings() map[string]interface{} {
-    m := map[string]interface{}{}
-    // start from the list of keys, and construct the map one value at a time
-    for _, k := range v.AllKeys() {
-        value := v.Get(k)
-        if value == nil {
-            // should not happen, since AllKeys() returns only keys holding a value,
-            // check just in case anything changes
-            continue
-        }
-        path := strings.Split(k, v.keyDelim)
-        lastKey := strings.ToLower(path[len(path)-1])
-        deepestMap := deepSearch(m, path[0:len(path)-1])
-        // set innermost value
-        deepestMap[lastKey] = value
-    }
-    return m
-}
-```
-*interface{}*的意义就不解释了，*v.AllSettings()*实际返回的是一个map。具体细节暂时放一放。
-
-我们再看*defaultDecoderConfig(rawVal)*
-
-```go
-func defaultDecoderConfig(output interface{}) *mapstructure.DecoderConfig {
-    return &mapstructure.DecoderConfig{
-        Metadata:         nil,
-        Result:           output,
-        WeaklyTypedInput: true,
-        DecodeHook:       mapstructure.StringToTimeDurationHookFunc(),
-    }
-}
-```
-
-返回了一个数据结构，这是能够跟decode的函数签名对的上的，而我们的配置对象成为其中一个域*Result*。
-
-我们已经看到，在decode函数中的
-
-```go
-decoder, err := mapstructure.NewDecoder(config)
-```
-
+最后，要说的是，如果我们要使用Viper作为自己的配置系统，并不需要做太多工作，依样画葫芦就行。
