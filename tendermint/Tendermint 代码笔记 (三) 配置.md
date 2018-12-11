@@ -150,7 +150,7 @@ struct
 
 `reflect.TypeOf(u)`就得到了变量*u*的*Type*`User`，`reflect.ValueOf(u)`就得到了变量*u*的*Value*`{张三 20}`，也就是说变量*u*的反射二元组是`({张三 20},main.User)`，而通过反射的*Value*或者*Type*的*Kind()*方法可以获取一个变量的原始类型，两者是等价的。另外可以通过*Value*的*Type()*方法获得一个*Value*的*Type*，但是并没有相应的*Value()*方法来获取一个Value的*Value*，毕竟那样太蠢了。
 
-然后我们再看一个例子，这个例子说明了怎样通过反射修改变量的值。
+我们再看一个例子，这个例子说明了怎样通过反射修改变量的值。
 
 ```go
 var x float64 = 3.4
