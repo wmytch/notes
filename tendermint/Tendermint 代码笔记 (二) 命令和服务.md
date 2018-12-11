@@ -79,7 +79,7 @@ func initFiles(cmd *cobra.Command, args []string) error {
 
 一条命令的执行流程我们已经讨论过，就不再详述。总之，在*github.com/spf13/cobra/command.go*中定义的这个函数`func (c *Command) execute(a []string) (err error)`，规定了这个流程。
 
-而正如我们已经讨论过的，***node*这条命令中的服务就是在其*RunE*中启动的。**
+而正如我们已经讨论过的，**node这条命令中的服务就是在其RunE中启动的。**
 
 在讲主流程的时候我们已经看到了
 
@@ -173,10 +173,10 @@ func bindFlagsLoadViper(cmd *cobra.Command, args []string) error {
 
 说完命令，我们讨论服务。以BlockPool为例
 
-​```go
+```go
 type BlockPool struct {
-​    cmn.BaseService
-​    startTime time.Time
+    cmn.BaseService
+    startTime time.Time
 
     mtx sync.Mutex
     // block requests         
@@ -195,13 +195,13 @@ type BlockPool struct {
 ```
 这里定义了一个*Service*，*BlockPool*，出于我们的目的，只需要关注*cmn.BaseService*，至于*cmn*，是*github.com/tendermint/tendermint/libs/common*的别名，我们且去看看*BaseService*的定义
 
-​```go
+```go
 type BaseService struct {
-    Logger  log.Logger
-    name    string
-    started uint32 // atomic
-    stopped uint32 // atomic
-    quit    chan struct{}
+​    Logger  log.Logger
+​    name    string
+​    started uint32 // atomic
+​    stopped uint32 // atomic
+​    quit    chan struct{}
 
     // The "subclass" of BaseService
     impl Service
