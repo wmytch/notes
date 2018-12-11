@@ -71,7 +71,7 @@ func initFiles(cmd *cobra.Command, args []string) error {
 
 ```
 
-这里定义了一个函数*initFiles*，并将其赋给了*RunE*这个函数变量，而*`initFilesWithConfig(config)`*参看源文件，就不讨论了。
+这里定义了一个函数*initFiles*，并将其赋给了*RunE*这个函数变量，而*initFilesWithConfig(config)*参看源文件，就不讨论了。
 
 实现了这么一条命令后，就可以通过*rootCmd.AddCommand( cmd.InitFilesCmd)*将其加入到rootCmd的命令树中，*rootCmd*是一个指针，被初始化为前面所说的*RootCmd*，当然，这也是个指针。
 
@@ -105,7 +105,7 @@ func OnInitialize(y ...func()) {
 }  
 ```
 
-显然，这里是设置了一些初始化函数，这些初始化函数会在*preRun*函数里依次执行，注意是*preRun*，不是*PreRun*。如前所述，可以参见command.go里的`func (c *Command) execute(a []string) (err error)`，就不细说了。
+显然，这里是设置了一些初始化函数，这些初始化函数会在*preRun*函数里依次执行，注意是*preRun*，不是*PreRun*。如前所述，可以参见command.go里的*func (c *Command) execute(a []string) (err error)*，就不细说了。
 
 接下来我们再看
 
@@ -132,11 +132,11 @@ func concatCobraCmdFuncs(fs ...cobraCmdFunc) cobraCmdFunc {
 
 这里需要注意的是
 
-- 可变参数列表(fs ...cobraCmdFunc)在调用这个函数的时候就已经确定并且被闭包锁捕获，也就是两个函数变量*bindFlagsLoadViper*和*cmd.PersistentPreRunE*，不存在将来执行PersistentPreRunE时才确定fs是什么的问题。
+- 可变参数列表*(fs …cobraCmdFunc)*在调用这个函数的时候就已经确定并且被闭包锁捕获，也就是两个函数变量*bindFlagsLoadViper*和*cmd.PersistentPreRunE*，不存在将来执行*PersistentPreRunE*时才确定fs是什么的问题。
 
-- RootCmd初始化时定义的PersistentPreRunE是存在于内存中并且可被寻址的，不然就无从作为argument传入。
+- RootCmd初始化时定义的*PersistentPreRunE*是存在于内存中并且可被寻址的，不然就无从作为argument传入。
 
-于是，这个函数就成为rootCmd的新的PersistentPreRunE将来被调用。
+于是，这个函数就成为rootCmd的新的*PersistentPreRunE*将来被调用。
 
 接下来看
 
@@ -163,8 +163,6 @@ func bindFlagsLoadViper(cmd *cobra.Command, args []string) error {
     }                         
     return nil
 }
-
-
 ```
 
 如前面所说，读取了配置文件，但这并不意味着配置就生效了，而是要到在*PersistentPreRunE()*中调用到*ParseConfig()*时才会真正对配置进行解析。
