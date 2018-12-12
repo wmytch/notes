@@ -332,7 +332,7 @@ func (r *remoteClientCreator) NewABCIClient() (abcicli.Client, error) {
 
 所以，虽然go并不是个面向对象的程序设计语言，但是用鸭子类型实现了多态。
 
-知道clientCreator是什么之后，我们再来看*NewAppConns*。
+总之，clientCreator就是用来与ABCI App建立连接的一个对象，我们再来看*NewAppConns*。
 
 ##### NewAppConns
 
@@ -343,7 +343,7 @@ func NewAppConns(clientCreator ClientCreator) AppConns {
 
 ```
 
-而返回的*AppConns*是
+返回值的*AppConns*是个接口，同时也是个服务
 
 ```go
 type AppConns interface {     
@@ -355,9 +355,10 @@ type AppConns interface {
 }  
 ```
 
-那么
+而
 
 ```go
+
 func NewMultiAppConn(clientCreator ClientCreator) *multiAppConn {
     multiAppConn := &multiAppConn{
         clientCreator: clientCreator,
@@ -367,9 +368,7 @@ func NewMultiAppConn(clientCreator ClientCreator) *multiAppConn {
 }
 ```
 
-注意上面的cmn.NewBaseService(nil, "multiAppConn", multiAppConn)的第三个参数multiAppConn，如前面我们解说服务时候提到的，这是又把multiAppConn传给了其BaseService当中的Service成员。
-
-并且
+返回的
 
 ```go
 type multiAppConn struct {    
@@ -383,15 +382,9 @@ type multiAppConn struct {
 }
 ```
 
-因此*multiAppConn*也是个鸭子类型，实现了接口*AppConns*，当然并不是说就凭上面这几行代码就能这么说，而是在于其实现了这几个函数
+也是个服务，并且实现了AppConns接口的三个函数，所以它就是个AppConns。
 
-```go
-Mempool() AppConnMempool
-Consensus() AppConnConsensus   
-Query() AppConnQuery 
-```
-
-以及在函数*NewMultiAppConn*中的两行赋值语句。
+注意上面的cmn.NewBaseService(nil, "multiAppConn", multiAppConn)的第三个参数multiAppConn，如前面我们解说服务时提到的，这是又把multiAppConn传给了其BaseService当中的Service成员。
 
 这里必须要提醒的是在实现接口的函数时，其接收者尽可能用指针的形式，正如在C++中的多态也总是由类指针来实现，虽然其中的原理表面上是不一样的，但是归根结底，总还是可以归结到C++中为什么要使用指针的原理上。
 
