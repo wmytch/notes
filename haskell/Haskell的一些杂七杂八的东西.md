@@ -658,7 +658,15 @@ map f (x : xs) = f x : map f xs
 
 注意第一行的hiding (map)。
 
-这里定义的map函数，有两个参数：*f* 和*(x:xs)*。从签名看，*f*代表一个函数*(a->b)*，*xs*是个List，要记得一个List的*(x:xs)*这种表达方式。并不是说会自动把*xs*拆分成*(x:xs)*，而是*xs*本身就是*(x:xs’)*，体会一下区别。递归的基本部分我们忽略，只看递归部分，这里就是说map的第一个参数，函数*f*，处理第二个参数List *xs*的队首，*xs*的队尾则继续递归。更进一步，就是*xs*的队首是函数*f*的参数。
+这里定义的map函数，有两个参数：*f* 和*(x:xs)*。从签名看，*f*代表一个函数*(a->b)*，*xs*是个元素为a类型的List，而结果则是一个元素类型为b的List。要记得一个List的*(x:xs)*这种表达方式，并不是说会自动把*xs*拆分成*(x:xs)*，而是*xs*本身就是*(x:xs’)*，体会一下区别。递归的基本部分我们忽略，只看递归部分，这里就是说map的第一个参数，函数*f*，处理第二个参数List *xs*的队首，*xs*的队尾则继续递归。更进一步，就是*xs*的队首是函数*f*的参数，一个a类型的元素，经过*f*处理后返回一个b类型的元素，并且与剩下的递归部分通过`:`运算生成一个b类型的List。
+
+总之，map定义了一个递归函数的模板，将一个函数，也就是其第一个参数*f*，映射到待处理的数据，一个List(x:xs)上，最终返回经过*f*对数据处理的结果。
+
+注意的是这里用了`:`来生成一个List，这也是map的签名规定了的，如果我们要求的结果不是一个List，而是其他的一个什么，比方说累加值，这个时候map的签名中返回值就不应该是[b]，而是b，或者a，当然b也可能就是a。
+
+实际上，最后的返回值也不一定要跟a或者b有什么关系，当然此时这个函数就不叫map，而是一个别的什么名字了，比方说**reduce**，或者**filter**，或者**zipWith**。
+
+
 
 我们来看第一个例子
 
@@ -686,3 +694,64 @@ distancesFromPoint point points = map distanceP points
     distanceP p = distance point p
 ```
 这里就不说map的语义了。说复杂，并不是说map变得复杂，而是*distancesFromPoint*带了两个参数，第一个参数*point*并没有在map里边出现，而是出现在了*where*子句中*distanceP*的定义中，并且在其后的递归中保持不变，会变的只是map的第二个参数，那个**List**。
+
+### 匿名函数
+
+也叫闭包，或者别的一些什么名字，闭包是个比较通用的叫法了。
+
+```haskell
+functionName a1 a2 ⋯ an = body
+```
+
+与
+
+```haskell
+\a1 a2 ⋯ an -> body
+```
+
+是等价的，也就是说这个匿名函数，在参数列表前用`\`代替了函数名，同时把绑定符号`=`用`->`代替，其它的就没有了。当然匿名函数终究要符合闭包的使用条件。比方说
+
+```haskell
+nRadius :: ColourPoint -> Float -> [ColourPoint] -> [ColourPoint]
+inRadius point radius points = filter (\p -> distance point p <= radius) points
+
+llSquares :: Num a => [a] -> [a]
+allSquares xs = map (\x -> x * x) xs
+```
+
+上面filter的定义是：
+
+```haskell
+filter :: (a -> Bool) -> [a] -> [a]
+filter p []
+  = []
+filter p (x : xs)
+  | p x       = x : filter p xs
+  | otherwise = filter p xs
+```
+
+### Point-free notation and partial application
+
+使用map的函数定义并不检查参数列表，所以我们可以
+
+```haskell
+allSquares :: Num a => [a] -> [a]
+allSquares = map (\x -> x * x)
+```
+
+考虑map的类型
+
+```haskell
+map :: (a -> b) -> [a] -> [b]
+```
+
+于是map就生成了一个新的函数
+
+```haskell
+allSquares = map (\x -> x * x)
+```
+
+怎么理解呢，初看起来这就像是个宏替换，不过在haskell中有个概念叫柯里化，也就是说，从map的类型来看，`map (\x -> x * x)`会得到一个新函数，这个函数以`[a]`为参数，而这里由`map (\x -> x * x)`得到的这个函数绑定到了*allSquares*上。其实我们在写C代码的时候也经常会使用宏替换来实现这样的功能，不过那个需要仔细调试，毕竟编译器在预编译的时候不会做任何检查，只是简单替换。
+
+其他的所谓*high-order*函数都可以类似处理，也就是在绑定函数定义的时候不加参数列表，只要生成一个函数即可，因为这个参数列表也只是传递到新生成的这个函数。
+

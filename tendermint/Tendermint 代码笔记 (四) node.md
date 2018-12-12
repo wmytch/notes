@@ -43,8 +43,7 @@ type Node struct {
     rpcListeners     []net.Listener         // rpc servers
     txIndexer        txindex.TxIndexer
     indexerService   *txindex.IndexerService
-    prometheusSrv    *http.Server                                                                                                                                                                
-}  
+    prometheusSrv    *http.Server                             }  
 ```
 
 显然这是个服务的定义，其中的许多字段本身也是服务，我们会逐个研究。
@@ -83,6 +82,8 @@ func NewNode(config *cfg.Config,
 
 在接下来的讨论中我们会说明这些参数是什么。
 
+#### 数据库
+
 除去两条打印语句，接下来马上就是
 
 ```go
@@ -92,7 +93,7 @@ func NewNode(config *cfg.Config,
 		return nil, err
 	}
 ```
-显然这里创建了一个数据库，这里*dbProvider*类型是*DBProvider*，其值是*DefaultDBProvider*。其定义都在*node.go*文件中。
+显然这里创建了一个数据库，这里*dbProvider*类型是*DBProvider*，一个函数变量，被赋值为*DefaultDBProvider*。其定义都在*node.go*文件中。
 ```go
 // DBProvider takes a DBContext and returns an instantiated DB.
 type DBProvider func(*DBContext) (dbm.DB, error)
@@ -108,7 +109,7 @@ type DBContext struct {
     Config *cfg.Config
 } 
 ```
-注释已经说明它们是干什么的了，就不再啰嗦，只不过我们要知道tendermint缺省使用的数据库是levelDB。
+我们知道tendermint缺省使用的数据库是levelDB，这是缺省配置里边写好的。
 
 dbm是*github.com/tendermint/tendermint/libs/db*的别名。
 
@@ -118,9 +119,9 @@ dbm是*github.com/tendermint/tendermint/libs/db*的别名。
 type DBBackendType string
 ```
 
-这里自定义了一个类型，*`DBBackendType(ctx.Config.DBBackend)`*是类型转换，*ctx.Config.DBBackend*按定义是个string。注意跟C语言类型转换句法的区别。
+这里自定义了一个类型，*DBBackendType(ctx.Config.DBBackend)*是类型转换，*ctx.Config.DBBackend*按定义是个string。注意跟C语言类型转换句法的区别。
 
-###### NewDB
+于是我们在*ctx.Config.DBDir()*目录下建立了一个叫*ctx.ID*,也就是*blockstore*的levelDB数据库。
 
 ```go
 func NewDB(name string, backend DBBackendType, dir string) DB {
@@ -142,13 +143,18 @@ func NewDB(name string, backend DBBackendType, dir string) DB {
     return db
 }
 ```
-*backends*是一个*map*：`var backends = map[DBBackendType]dbCreator{}`,并且初始化为空。
-
-*dbCreator*是个函数变量：`type dbCreator func(name string, dir string) (DB, error)`。
-而*DBBackendType*则是：
+*backends*是一个*map*：
 
 ```go
+var backends = map[DBBackendType]dbCreator{}
+```
 
+*dbCreator*是个函数变量：
+```go
+type dbCreator func(name string, dir string) (DB, error)
+```
+而*DBBackendType*则是：
+```go
 const (
     LevelDBBackend   DBBackendType = "leveldb" // legacy, defaults to goleveldb unless +gcc
     CLevelDBBackend  DBBackendType = "cleveldb"
@@ -158,6 +164,7 @@ const (
 ) 
 ```
 那么，*backends*是怎么初始化的呢？是通过在相应的数据库包的*init()*函数中调用*registerDBCreator*，我们知道这样的*init()*总是在*main()*之前执行。
+
 ```go
 func registerDBCreator(backend DBBackendType, creator dbCreator, force bool) {                                                                                                                   
     _, ok := backends[backend]
@@ -167,9 +174,45 @@ func registerDBCreator(backend DBBackendType, creator dbCreator, force bool) {
     backends[backend] = creator
 }     
 ```
-总之我们创建了一个名字叫做*blockstore*，以及如下的一个叫*state*的的levelDB数据库：
+比方说在*github.com/tendermint/tendermint/libs/db/go_level_db.go*中的*init()*函数
 
-​	blockStore := bc.NewBlockStore(blockStoreDB)
+```go
+func init() {                 
+    dbCreator := func(name string, dir string) (DB, error) {
+        return NewGoLevelDB(name, dir) 
+    }
+    registerDBCreator(LevelDBBackend, dbCreator, false)
+    registerDBCreator(GoLevelDBBackend, dbCreator, false)
+}  
+```
+
+#### BlockStore
+
+接下来
+
+```go
+blockStore := bc.NewBlockStore(blockStoreDB)
+```
+
+创建了一个*BlockStore*
+
+```go
+type BlockStore struct {
+    db dbm.DB                 
+    mtx    sync.RWMutex       
+    height int64
+}                             
+
+func NewBlockStore(db dbm.DB) *BlockStore {
+    bsjson := LoadBlockStoreStateJSON(db) 
+    return &BlockStore{       
+        height: bsjson.Height,
+        db:     db,
+    }
+}
+```
+
+总之，这是个存储区块的地方。为了不至于迷失在代码网中，就先到这。*NewNode()*的流程看完后，再去研究各个包的实现。
 
 #### State
 
@@ -204,7 +247,7 @@ func registerDBCreator(backend DBBackendType, creator dbCreator, force bool) {
 ```
 #### proxyApp
 
-我们知道，tendermint启动一个节点有两种方式，一个是在启动*node*时带有*--proxy_app=kvstore*参数，这时候会启动内置的*kvstore*这个*ABCI APP*并与之建立三个连接(*consensus, mempool, query*)，一个是没有这个参数，那么就必须另外启动一个指定地址和端口的*ABCI APP*，所谓指定，指的是在配置文件里边设置好，再启动tendermint时，同样会建立同上的三个连接。
+我们知道，tendermint启动一个节点有两种方式，如果在启动*node*时带有*--proxy_app=kvstore*参数，这时候会启动内置的*kvstore*这个*ABCI APP*并与之建立三个连接(*consensus, mempool, query*)，而如果没有这个参数，那么就必须另外启动一个指定地址和端口的*ABCI APP*，所谓指定，指的是在配置文件里边设置好，再启动tendermint时，同样会建立同上的三个连接。
 
 ```go
 	// Create the proxyApp and establish connections to the ABCI app (consensus, mempool, query).
@@ -217,14 +260,7 @@ func registerDBCreator(backend DBBackendType, creator dbCreator, force bool) {
 *NewAppConns*要做什么呢？不过我们还是先看*clientCreator*，从*NewNode*的参数列表中我们可以看到这是一个*proxy.ClientCreator*
 
 ##### clientCreator
-
-```go
-type ClientCreator interface {
-    NewABCIClient() (abcicli.Client, error)
-}  
-```
-
-是一个接口，我们在回到*DefaultNewNode*，可以看到传入到*NewNode*的实际参数是*proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir())*返回的这么一个*proxy.ClientCreator*,这三个参数分别代表*proxy*的地址，连接方式及数据库目录，连接方式缺省是*socket*。我们看看这个函数做了什么：
+我们先回到*DefaultNewNode*，可以看到传入到*NewNode*的实际参数是*proxy.DefaultClientCreator(config.ProxyApp, config.ABCI, config.DBDir())*返回的这么一个*proxy.ClientCreator*,这三个参数分别代表*proxy*的地址，连接方式(socket或者grpc)及数据库目录，连接方式缺省是*socket*。我们看看这个函数做了什么：
 
 ```go
 func DefaultClientCreator(addr, transport, dbDir string) ClientCreator {
@@ -247,8 +283,13 @@ func DefaultClientCreator(addr, transport, dbDir string) ClientCreator {
 
 ```
 
-在go中，数值，字符串都是合法的*switch*的条件，*case*也不需要*break*，所以需要*fallthrough*，这是与c/c++不同的地方。另外，我们从这里可以看到其实tendermint启动node的时候有6种方式。我们先看*NewRemoteClientCreator*，因为对应的是缺省的*addr*，也就是*`"socket"`*，
+在go中，数值，字符串都是合法的*switch*的条件，*case*也不需要*break*，所以需要*fallthrough*，这是与c/c++不同的地方。
 
+我们先看*NewRemoteClientCreator*，*addr*可以是配置文件里边读取的，也就是缺省的*proxy_app = "tcp://127.0.0.1:26658”*，或者自定义的一个值，也可以是命令行参数，如果启动Tendermint时使用的是这样的命令行：
+
+> tendermint node --proxy_app=kvstore
+
+那么配置里的这个值就会被这个kvstore代替。另外，我们从这里可以看到tendermint启动node时proxy_app参数的可选值。
 ```go
 func NewRemoteClientCreator(addr, transport string, mustConnect bool) ClientCreator {
     return &remoteClientCreator{   
@@ -268,8 +309,16 @@ type remoteClientCreator struct {
     mustConnect bool
 }
 ```
+而
+```go
+type ClientCreator interface {
+    NewABCIClient() (abcicli.Client, error)
+}  
+```
 
-而*ClientCreator*是一个*interface*，如果一定要按C++的逻辑，那么这个*remoteClientCreator*就是抽象类*ClientCreator*的子类，不过在go以及python中这里的逻辑就是所谓的鸭子类型。因为
+是一个接口。
+
+如果一定要按C++的逻辑，那么这个remoteClientCreator就是抽象类ClientCreator的子类。不过在go以及python中这里就是所谓的鸭子类型。因为remoteClientCreator实现了ClientCreator的NewABCIClient()方法，于是它就是个ClientCreator。
 
 ```go
 func (r *remoteClientCreator) NewABCIClient() (abcicli.Client, error) {
@@ -281,9 +330,9 @@ func (r *remoteClientCreator) NewABCIClient() (abcicli.Client, error) {
 }
 ```
 
-所以，虽然go并不个面向对象的程序设计语言，但是用鸭子类型实现了多态。
+所以，虽然go并不是个面向对象的程序设计语言，但是用鸭子类型实现了多态。
 
-知道clientCreator是什么之后，我们再来看*NewAppConns*
+知道clientCreator是什么之后，我们再来看*NewAppConns*。
 
 ##### NewAppConns
 
@@ -318,6 +367,8 @@ func NewMultiAppConn(clientCreator ClientCreator) *multiAppConn {
 }
 ```
 
+注意上面的cmn.NewBaseService(nil, "multiAppConn", multiAppConn)的第三个参数multiAppConn，如前面我们解说服务时候提到的，这是又把multiAppConn传给了其BaseService当中的Service成员。
+
 并且
 
 ```go
@@ -346,121 +397,7 @@ Query() AppConnQuery
 
 ##### proxyApp.Start()
 
-事实上这个函数我们可以不用关注，而只要实现*proxyApp*的*OnStart()*即可，换句话说就是*multiAppConn*实现了接口*AppConns*，也进而实现了*cmn.Service*。
-
-###### OnStart()
-
-```go
-func (app *multiAppConn) OnStart() error {
-    // query connection
-    querycli, err := app.clientCreator.NewABCIClient()
-    if err != nil {
-        return errors.Wrap(err, "Error creating ABCI client (query connection)")
-    }
-    querycli.SetLogger(app.Logger.With("module", "abci-client", "connection", "query"))
-    if err := querycli.Start(); err != nil { 
-        return errors.Wrap(err, "Error starting ABCI client (query connection)")
-    }
-    app.queryConn = NewAppConnQuery(querycli)
-   
-    // mempool connection     
-    memcli, err := app.clientCreator.NewABCIClient()
-    if err != nil {           
-        return errors.Wrap(err, "Error creating ABCI client (mempool connection)")
-    }
-    memcli.SetLogger(app.Logger.With("module", "abci-client", "connection", "mempool"))
-    if err := memcli.Start(); err != nil {
-        return errors.Wrap(err, "Error starting ABCI client (mempool connection)")
-    }
-    app.mempoolConn = NewAppConnMempool(memcli)
-                              
-    // consensus connection   
-    concli, err := app.clientCreator.NewABCIClient()
-    if err != nil {
-        return errors.Wrap(err, "Error creating ABCI client (consensus connection)")
-    }
-    concli.SetLogger(app.Logger.With("module", "abci-client", "connection", "consensus"))
-    if err := concli.Start(); err != nil {
-        return errors.Wrap(err, "Error starting ABCI client (consensus connection)")
-    }
-    app.consensusConn = NewAppConnConsensus(concli)
-
-    return nil
-}
-
-```
-
-这里我们只需要看函数*Start*和*NewAppConnXXXX*。所有的*Start*如前所述，分别最后会走到这里
-
-###### OnStart
-
-```go
-func (cli *socketClient) OnStart() error {
-    if err := cli.BaseService.OnStart(); err != nil {                                                                                                                                            
-        return err
-    }
-   
-    var err error
-    var conn net.Conn
-RETRY_LOOP:
-    for {
-        conn, err = cmn.Connect(cli.addr) 
-        if err != nil {
-            if cli.mustConnect {               
-                return err
-            }
-            cli.Logger.Error(fmt.Sprintf("abci.socketClient failed to connect to %v.  Retrying...", cli.addr))                                                                                   
-            time.Sleep(time.Second * dialRetryIntervalSeconds)                                                                                                                                   
-            continue RETRY_LOOP        
-        }
-        cli.conn = conn
-   
-        go cli.sendRequestsRoutine(conn)
-        go cli.recvResponseRoutine(conn)                                                                                                                                                         
-   
-        return nil
-    }
-}  
-
-```
-
-这个函数很直白，如果*mustConnect==false*，这是缺省情况，就会一直尝试连接指定的*ABCI App*，或者说，节点和App的启动顺序是没有关系的。连接上了之后，就会启动两个线程：`cli.sendRequestsRoutine(conn)`和`cli.recvResponseRoutine(conn)`，这两个线程的细节就不说了，分别用于发送和接收数据。
-
-####### NewAppConnXXXX
-
-```go
-type appConnQuery struct {    
-    appConn abcicli.Client    
-}
-   
-func NewAppConnQuery(appConn abcicli.Client) *appConnQuery {
-    return &appConnQuery{
-        appConn: appConn,     
-    }
-}  
-
-type appConnMempool struct {
-    appConn abcicli.Client
-}
-
-func NewAppConnMempool(appConn abcicli.Client) *appConnMempool {
-    return &appConnMempool{
-        appConn: appConn,
-    }
-}
-
-type appConnConsensus struct {
-    appConn abcicli.Client
-}
-
-func NewAppConnConsensus(appConn abcicli.Client) *appConnConsensus {
-    return &appConnConsensus{
-        appConn: appConn,
-    }
-}
-```
-
-很直白，就是分别保存了前面建立的3个连接。
+这里我们不打算深究这个函数调用，简单的说，就是在其中建立了与ABCI App的3个连接并启动了收发线程。
 
 #### NewHandshaker
 
