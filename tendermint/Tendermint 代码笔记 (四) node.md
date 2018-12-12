@@ -393,9 +393,8 @@ type multiAppConn struct {
 这里我们不打算深究这个函数调用，简单的说，就是在其中建立了与ABCI App的3个连接并启动了收发线程。
 
 #### NewHandshaker
-
+接下来，创建一个handshake，这个东西用来做什么的，我们慢慢看。
 ```go
-
 	// Create the handshaker, which calls RequestInfo, sets the AppVersion on the state,
 	// and replays any blocks as necessary to sync tendermint with the app.
 	consensusLogger := logger.With("module", "consensus")
@@ -405,7 +404,43 @@ type multiAppConn struct {
 		return nil, fmt.Errorf("Error during handshake: %v", err)
 	}
 ```
+先看NewHandshaker(stateDB, state, blockStore, genDoc)，四个参数都是已经创建好的对象。
+
+```go
+type Handshaker struct {      
+    stateDB      dbm.DB       
+    initialState sm.State     
+    store        sm.BlockStore
+    genDoc       *types.GenesisDoc 
+    logger       log.Logger   
+                              
+    nBlocks int // number of blocks applied to the state
+}
+   
+func NewHandshaker(stateDB dbm.DB, state sm.State,
+    store sm.BlockStore, genDoc *types.GenesisDoc) *Handshaker {
+
+    return &Handshaker{       
+        stateDB:      stateDB,
+        initialState: state,  
+        store:        store,  
+        genDoc:       genDoc, 
+        logger:       log.NewNopLogger(),
+        nBlocks:      0,
+    }
+}  
+```
+
+```go
+handshaker.Handshake(proxyApp)
+```
+
+就是通过proxyApp的query连接与ABCI App进行握手。注意这并不是个服务，只是因为上面proxyApp与App刚刚建立了三条连接，于是先与App同步一下状态。
+
 ####  LoadState
+
+大概上面握手的时候除了更新了Version.Consensus.App，还修改了其他一些东西，虽然代码里边没看到有什么特别的，所以重置一下state。
+
 ```go
 	// Reload the state. It will have the Version.Consensus.App set by the
 	// Handshake, and may have other modifications as well (ie. depending on
