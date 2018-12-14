@@ -1,159 +1,13 @@
-# Haskell的一些杂七杂八的东西
 
+# [Learning Haskell](http://learn.hfm.io/index.html "by Gabriele Keller and Manuel M T Chakravarty") 笔记
 [TOC]
-## 随看随记的东西
+## First Step
 
-### 普通函数、中缀函数(运算符)
-
-#### 转化
-
-```haskell
-`普通函数` => 中缀函数
-(中缀函数) => 普通函数
-```
-
-#### 优先级
-
-- 普通函数优先级高于中缀函数
-
-- 中缀函数优先级0-9，9最高
-
-- 没有结合性的中缀函数不能连写，必须加括号，比如
-
-  ```haskell
-  x `elem` xs `elem` ys是不对的，必须加上括号：
-  （x `elem` xs） `elem` ys
-  或者
-  x `elem` （xs `elem` ys）
-  ```
-- ::优先级最低
-
-### 命名风格
-
-- 构造函数，用CamelName
-- 其他函数，用camelName
-- 自定义类型，CamelName
-
-### `x -> y -> z`
-
-表示两个参数*x*，*y*，返回*z*，也就是最后一个`->`后面的那个标志符是返回值，前面的`->`只是把参数分隔开，如果只有一个参数，就不需要`->`了
-
-### `=>`
-
-表示一个约束，`A a => [a]`表示*a*具有*A*的性质。
-
-### 数据申明 data 
-*Type = MakeType arg1 arg2*
-基本上类似于
-
-```C++
-class Type{
-    Type MakeType(arg1,arg2);
-}
-```
-而
-*data Type = Type arg1 arg2*
-也类似于
-
-```C++
-class Type{
-    Type(arg1,arg2)
-}
-```
-
-当然不能机械套用，只是说明一下类型是类型，函数是函数，构造函数是允许跟类型同名的，而C++里面这是必须的。
-
-另外还可以
-
-*data Type = arg1 :op arg2*，于是`:op`就是*Type*的构造运算符，可以这样用
-
-```haskell
-1.5 :op 2
-(:op) 1.5 2
-```
-
-### 模式匹配
-
-来看这段代码
-
-```haskell
-module Test where
-data Position = MakePosition Double Double
-
-distance :: Position -> Position -> Double
-distance p1 p2 =
-    case p1 of
-        MakePosition x1 y1 ->
-            case p2 of
-                MakePosition x2 y2 -> sqrt((x1 - x2)^2 + (y1 - y2)^2)
-                
-pointA :: Position
-pointA = MakePosition 0 0
-
-pointB :: Position
-pointB = MakePosition 3 4
-```
-
-显然，如前述，*`data Position = MakePosition Double Double`*定义了一个类型Position，以及这个类型的构造函数。姑且就先算是定义吧，毕竟这里的构造函数如果理解为返回了一个Position，其实也没什么问题。
-
-接下来*`distance :: Position -> Position -> Double`*不如理解为一个约束，事实上，申明在任何一门语言当中都可以认为是个约束，规定了这个函数的参数个数和返回值以及它们各自的数据类型，而`->`也可以理解为***满足前一个条件则往下***。对*distance*做了一个约束之后，就可以开始定义模板了：显然*distance*有两个参数，*case p1 of  MakePosition x1 y1*判断*p1*满足是*Position*类型这么个条件，满足则下一个，也就是判断*p2*的类型，继续满足，于是计算*sqrt*。
-
-接下来对*pointA*和*pointB*的处理就通常理解好了，不外乎申明了一个变量，并赋了值。
-
-实际上，这段模式匹配以及所谓的绑定，在许多其他语言中是由编译器处理的。也就是说，判断实际参数的类型，并将其与名义参数绑定，是由编译器做的。这样一看，应该就不会对所谓的模式匹配不明觉厉了。
-
-所以，必然有个普通样式的函数定义：
-
-```haskell
-distance :: Position -> Position -> Double
-distance (MakePosition x1 y1) (MakePosition x2 y2) =
-	sqrt((x1 - x2)^2 + (y1 - y2)^2)
-```
-
-以及一个略有些怪异的版本：
-
-```haskell
-distance p1 p2 =
-	let MakePosition x1 y1 = p1
-		MakePosition x2 y2 = p2
-	in sqrt((x1 - x2)^2 + (y1 - y2)^2)
-```
-
-进而有
-
-```haskell
-distance p1@(MakePosition x1 y1) p2@(MakePosition x2 y2) =
-	sqrt((x1 - x2)^2 + (y1 - y2)^2)
-```
-
-但是不管怎么定义，调用的时候总是用*distance p1 p2*的形式。
-
-### 列表`[]`
-
-```haskell
-data [a] = a : [a] | []
-```
-
-定义了一个类型`[]`，这个类型通常称为列表，以及列表的构造函数`:`和`[]`，这个`[]`表示构造一个空表。
-
-列表要这样用：
-
-```haskell
-lista = [1,2,3,4]
-listb = 3 : lista
-```
-
-## 以上是看一本中文书时的笔记，再次验证中文书就是不靠谱，一边看一边还得自己脑补，看得累，所以还是老老实实上官网看文档。暂时就不删了，如果跟将来有什么不同或者混淆的地方，以将来的说法为准，这里保留的目的是为了证明前面说的中文书就是不靠谱不是瞎说的。接下来要看的文档是 :
-
-## [Learning Haskell](http://learn.hfm.io/index.html "by Gabriele Keller and Manuel M T Chakravarty") 
-
-### First Step
-
-#### Values 
+### Values 
 
 似乎对应于其他语言的*字面量*(*literal*)，比方说，`5`(整型数值)，`”hello world!“`(字符串)，`3.141`(浮点数)。
 
-#### 常用类型
+### 常用类型
 
 - `Int` = {…, `-3`, `-2`, `-1`, `0`, `1`, `2`, `3`, …}
 - `Float` = {…, `-1232.42342`, …, `1.0`, `3.141`, …}
@@ -164,33 +18,33 @@ listb = 3 : lista
 
 这个没什么好解释的
 
-#### `::`
+### `::`
 
 `1 :: Int`可以读作“`1` *的类型是* `Int`“,
 
-#### 函数定义 
+### 函数定义 
 
 一个函数定义包括一个*head*和一个*body*以及一个`=`。比方说：![inc x = x + 1](intro_canned.png)
 
-#### 嵌套调用
+### 嵌套调用
 
 以上面函数为例，
 
 > `inc (inc 5)`  ⇒  `inc (5 + 1)`  ⇒  `inc 6`  ⇒  `6 + 1`  ⇒  `7`
 
-#### 命名规则
+### 命名规则
 
 - 以小写字母或者`_`开头，这条不是强制而是惯例
 - 只能包含字母，数字，`_`，`’`
 - 不能重名，函数跟函数不能重名，变量跟变量不能重名，函数跟变量也不能重名
 
-#### 函数是映射
+### 函数是映射
 
 函数是个映射，唔，这才是函数本来的奥义呀，比方说：
 
 ![](intro_incPic.png)
 
-#### Type Signatures
+### Type Signatures
 
 一个函数的定义是这样的：
 
@@ -201,7 +55,7 @@ inc x = x + 1         -- function equation
 
 类型签名是可选的，不过它的主要作用一个是给程序员看，另一个是帮助haskell系统检查类型错误，所以还是有必要的。
 
-#### Multiple Arguments 及柯里化
+### Multiple Arguments 及柯里化
 
 ```haskell
 average :: Float -> Float -> Float
@@ -240,7 +94,7 @@ average:Float -> average'
 
 这种每次绑定一个参数，然后返回一个新函数的处理称之为柯里化，haskell中所有的函数都是这样处理的，缺省情况下。
 
-#### 中缀和前缀
+### 中缀和前缀
 
 - (中缀)就变成前缀：
 ```haskell
@@ -260,7 +114,7 @@ average:Float -> average'
 average 6.9 7.25
 ```
 
-#### 二元运算符左结合性
+### 二元运算符左结合性
 
 ```haskell
 6.9  `average` 7.25 `average` 3.4
@@ -272,7 +126,7 @@ average 6.9 7.25
 (6.9  `average` 7.25) `average` 3.4
 ```
 
-#### `=>`
+### `=>`
 
 只是在函数的类型签名中用到这个符号，表示对值的一个约束。比如：
 
@@ -282,7 +136,7 @@ average 6.9 7.25
 
 表示`a`是一个`Num`类型的值
 
-#### 常用*type classes*和重载函数
+### 常用*type classes*和重载函数
 
 - Typeclass `Show`
   - 函数： `show :: Show a => a -> String` 。
@@ -348,9 +202,9 @@ average 6.9 7.25
 
 - 句法上，Typeclass所在的位置必须是Typeclass，不能是具体的类型名字，比如上面的`(Ord a, Num a) `改成`(Ord a, Int a) `是不行的。
 
-### Fundamentals
+## Fundamentals
 
-#### module 
+### module 
 
 句法：
 
@@ -362,7 +216,7 @@ where
 
 `where`放第一行也是可以的。module名字首字母必须**大写**。
 
-#### 分支
+### 分支
 
 也就是*if .. then .. else ..*及其各种变形
 
@@ -383,7 +237,7 @@ signum x | x <  0     = -1
 
 以上3个*signum*是等价的，也同样在`x<0`的时会有一些问题。
 
-#### Binders
+### Binders
 
 所谓绑定，理解为固定赋值就好了，与赋值不同的是绑定之后就不能再变了，所以叫绑定而不是赋值。
 
@@ -407,7 +261,7 @@ circleArea' diameter  = pi * radius * radius
 
 对于绑定本身没有什么特别的，只是要注意作用范围内，绑定不可更改。
 
-#### (形参)多态函数
+### (形参)多态函数
 
 看例子
 
@@ -421,7 +275,7 @@ snd (x, y)  = y
 
 这里没有类型签名，因为，fst和snd都不对参数进行运算，所以不用管参数的类型是什么，a，b的类型甚至可以不一样。这种函数叫**(形参)多态函数**
 
-#### 元组
+### 元组
 
 还是看例子
 
@@ -477,9 +331,9 @@ error "encountered a fatal error"  ⇒  ** Exception: encountered a fatal er
 
 
 
-## 递归
+### 递归
 
-### 计算
+计算
 
 ```haskell
 natSum :: Num a => a -> a
@@ -507,7 +361,7 @@ natSum n  | n > 0     = n + natSum (n - 1)
           | otherwise = error "natSum: Input value too small!"
 ```
 
-### List
+## List
 
 ```haskell
 repeatN :: Int -> a -> [a]
@@ -632,7 +486,7 @@ inRadius point radius (p : ps)
 
 相当于指定一个圆心为point半径为radius的圆，找出列表中所有位于圆内或者圆上的点。
 
-### Reductions: combining the elements of a list
+### Reductions: 合并列表的元素
 
 不确定标题该怎么翻译，意思就是通过对列表元素的一些组合或者合并操作实现缩减。
 
@@ -647,7 +501,10 @@ product (x:xs) = x * product xs
 当然这是递归，只不过与前面不同的是在空表是返回1，而不是0。
 
 ## Higher-order Functions
+### map/filter
+
 所谓*higer-order functions*就是那种用函数作为参数的函数，以及返回函数的函数，其实是很普通的概念。
+
 ```haskell
 import Prelude hiding (map)
 
@@ -664,12 +521,16 @@ map f (x : xs) = f x : map f xs
 
 注意的是这里用了`:`来生成一个List，这也是map的签名规定了的，如果我们要求的结果不是一个List，而是其他的一个什么，比方说累加值，这个时候map的签名中返回值就不应该是[b]，而是b，或者a，当然b也可能就是a。
 
-实际上，最后的返回值也不一定要跟a或者b有什么关系，当然此时这个函数就不叫map，而是一个别的什么名字了，比方说**reduce**，或者**filter**，或者**zipWith**。
+实际上，最后的返回值也不一定要跟a或者b有什么关系，当然此时这个函数就不叫map，而是一个别的什么名字了，比方说**filter**
 
-
-
+```haskell
+filter :: (a -> Bool) -> [a] -> [a]
+filter p []  = []
+filter p (x : xs)
+  | p x       = x : filter p xs
+  | otherwise = filter p xs
+```
 我们来看第一个例子
-
 ```haskell
 allSquares :: Num a => [a] -> [a]
 allSquares xs = map square xs
@@ -719,16 +580,7 @@ llSquares :: Num a => [a] -> [a]
 allSquares xs = map (\x -> x * x) xs
 ```
 
-上面filter的定义是：
-
-```haskell
-filter :: (a -> Bool) -> [a] -> [a]
-filter p []
-  = []
-filter p (x : xs)
-  | p x       = x : filter p xs
-  | otherwise = filter p xs
-```
+map和filter的定义如前，只不过这里使用了匿名函数。
 
 ### Point-free notation and partial application
 
@@ -754,4 +606,228 @@ allSquares = map (\x -> x * x)
 怎么理解呢，初看起来这就像是个宏替换，不过在haskell中有个概念叫柯里化，也就是说，从map的类型来看，`map (\x -> x * x)`会得到一个新函数，这个函数以`[a]`为参数，而这里由`map (\x -> x * x)`得到的这个函数绑定到了*allSquares*上。其实我们在写C代码的时候也经常会使用宏替换来实现这样的功能，不过那个需要仔细调试，毕竟编译器在预编译的时候不会做任何检查，只是简单替换。
 
 其他的所谓*high-order*函数都可以类似处理，也就是在绑定函数定义的时候不加参数列表，只要生成一个函数即可，因为这个参数列表也只是传递到新生成的这个函数。
+
+### Reductions
+
+上面看到的map和filter的共同点是都是只带两个参数，一个是函数，一个是数据。为方便记忆，再把他们的定义列一下
+
+```haskell
+map :: (a -> b) -> [a] -> [b]
+map f []       = []
+map f (x : xs) = f x : map f xs
+
+filter :: (a -> Bool) -> [a] -> [a]
+filter p []  = []
+filter p (x : xs)
+  | p x       = x : filter p xs
+  | otherwise = filter p xs
+```
+
+可以看到区别是map要用f操作x，而filter则只是简单的取出或者丢弃x。然而，取出或者丢弃本身也是一种操作，因此，filter完全可以归结到map上。
+
+我们看另外一种hige-order函数
+
+```haskell
+foldr :: (a -> b -> b) -> b -> [a] -> b
+foldr op n []     = n
+foldr op n (x:xs) = x `op` foldr n op xs
+```
+
+带了3个参数，一个是两个参数的函数，一个可以成为边界或者guard的数，另外一个是列表。
+
+这里的语义就是取出队首元素，队尾进行递归，最终返回值和队首元素作为函数的操作数进行运算。
+
+比方说
+
+```haskell
+minList :: [Int] -> Int
+minList xs = foldr min maxBound xs
+-- =x min foldr min maxBound xs'
+-- foldr min maxBound [] = maxBound
+-- xs=(x:xs'),下同
+
+sum :: Num a => [a] -> a
+sum xs = foldr (+) 0 xs
+-- =x (+) foldr (+) 0 xs'
+-- foldr (+) 0 [] = 0
+```
+
+当然，我们也可以定义point-free 风格的函数
+
+```haskell
+minList :: [Int] -> Int
+minList = foldr min maxBound 
+
+sum :: Num a => [a] -> a
+sum = foldr (+) 0 
+```
+
+以及匿名函数版本的
+
+```haskell
+concat :: [[a]] -> [a]
+concat = foldr (++) []
+
+reverse :: [a] -> [a]
+reverse = foldr (\x xs -> xs ++ [x]) []
+```
+
+实际上，我们还有左结合版本的fold
+
+```haskell
+foldl :: (b -> a -> b) -> b -> [a] -> b
+foldl op acc []     = acc
+foldl op acc (x:xs) = foldl op (acc `op` x) xs
+```
+
+就是先操作队首元素，然后操作结果和队尾一起进入递归，直到列表为空，这时候的返回值就是最后的返回值，其实这更像是递推，而不是递归了。
+
+比如
+
+```haskell
+stringToInt :: String -> Int
+stringToInt = foldl (\acc chr -> 10 * acc + digitToInt chr) 0
+
+fastReverse :: [a] -> [a]
+fastReverse = foldl (\accList x -> x : accList) []
+```
+
+所有以上这些函数定义，我们必须要注意的是**边界条件在high-order函数的基本部分检查，而在使用high-order函数进行定义的函数中不需要检查**。
+
+最后我们看这么个例子
+
+```haskell
+sumOfSquareRoots :: (Ord a, Floating a) => [a] -> a
+sumOfSquareRoots xs = sum (map sqrt (filter (> 0) xs))
+```
+
+其中的`(>0)`等价于`\x -> x>0`。于是
+
+```haskell
+sumOfSquareRoots xs = sum (x:xs')
+					= sum (map sqrt (x':xs''))
+					= sum (map sqrt (filter (\x -> x>0) (x'':xs''')))
+					= sum (map sqrt (|x>0 = x : filter (\x -> x>0) xs'''
+									 |otherwise = filter (\x -> x>0) xs'''))
+					= sum (map sqrt (x':x''))
+					= sum (x:xs')
+					= a
+```
+
+###  **$** 和 **.**
+
+```haskell
+infixr 0 $
+($) :: (a -> b) -> a -> b
+f $ x = f x
+
+(.) :: (b -> c) -> (a -> b) -> (a -> c)
+(f . g) x = f (g x)
+```
+
+`$`等价于加了括号
+
+```haskell
+sumOfSquareRoots xs = sum $ map sqrt $ filter (> 0) xs
+```
+
+注意看括号加到哪里了。
+
+所以如下定义是不对的
+
+```haskell
+sumOfSquareRoots = sum $ map sqrt $ filter (> 0) 
+```
+
+因为这时候
+
+```haskell
+sumOfSquareRoots xs = sum (map sqrt (filter (> 0))) xs
+```
+
+于是我们就需要`.`
+
+```hasekll
+sumOfSquareRoots = sum . map sqrt . filter (> 0) 
+```
+
+## Algebraic Data Types
+
+### Enumeration Types
+
+```haskell
+data <TypeName> = <DataConstructorName1> 
+				| ⋯ 
+				| <DataConstructorNameN>
+                deriving <Classes>
+```
+
+比如
+
+```haskell
+data Day
+  = Sunday
+  | Monday
+  | Tuesday
+  | Wednesday
+  | Thursday
+  | Friday
+  | Saturday
+  deriving (Enum)
+```
+
+*deriving (Enum)*表示新类型Day继承自标准类型Enum，也就意味着定义在Enum上的操作自动的也能应用到Day上。因此我们可以
+
+```haskell
+[Monday .. Friday]`   ⇒   `[Monday, Tuesday, Wednesday, Thursday, Friday]
+```
+
+### Pattern matching and case expressions
+
+模式匹配
+
+```haskell
+isWeekday :: Day -> Bool
+isWeekday Sunday   = False
+isWeekday Saturday = False
+isWeekday _        = True
+```
+
+case表达式
+
+```haskell
+isWeekday :: Day -> Bool
+isWeekday day = case day of
+                  Sunday   -> False
+                  Saturday -> False
+                  _        -> True
+```
+
+要注意的是，如果case表达式中找不到匹配项，将会抛出异常，这跟C或者别的一些语言不同，所以最后一个`_`是必须的，除非你能包括所有的情况，不过现代语言在编译时通常也会提出警告或者就作为一个error。
+
+### layout
+
+除了上面的样式之外，还可以这样
+
+```haskell
+isWeekday :: Day -> Bool
+isWeekday day = case day of
+                { Sunday   -> False
+                ; Saturday -> False
+                ; _        -> True
+                }
+```
+
+或者
+
+```haskell
+isWeekday :: Day -> Bool
+isWeekday day = case day of {Sunday -> False ; Saturday -> False; _ -> True}
+```
+
+也就是说使用`{}`和`;`的话，就不需要顾虑缩进了，否则，就要通过缩进来表示代码的嵌套性。
+
+把`;`放在句首是种很古怪的表达方式，所以我宁愿选择缩进。
+
+### Deriving type classes
 
