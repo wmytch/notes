@@ -782,6 +782,8 @@ data Day
 [Monday .. Friday]`   ⇒   `[Monday, Tuesday, Wednesday, Thursday, Friday]
 ```
 
+通常来说deriving(Show)会是个好主意。
+
 ### Pattern matching and case expressions
 
 模式匹配
@@ -829,5 +831,95 @@ isWeekday day = case day of {Sunday -> False ; Saturday -> False; _ -> True}
 
 把`;`放在句首是种很古怪的表达方式，所以我宁愿选择缩进。
 
-### Deriving type classes
+### 为什么要使用构造函数
 
+比方说我们有这样的定义
+
+```haskell
+type Point   = (Float, Float)
+type Vector  = (Float, Float)
+type Line    = (Point, Point)
+type Colour  = (Int, Int, Int, Int) 
+```
+
+有这样的函数
+
+```haskell
+movePointN :: Float -> Vector -> Point -> Point
+movePointN n (vx, vy) (x, y) = (n * vx + x, n * vy + y)
+```
+
+然后我们这样调用`movePointN 5 point vector`，显然haskell并不能检查出这里的错误。
+
+所以我们需要构造函数
+
+```haskell
+data <Type> = <Constructor> <Type1> ⋯ <TypeN>
+            deriving <Classes>
+```
+
+比如
+
+```haskell
+data Point = Point Float Float
+           deriving (Show, Eq)
+data Vector = Vector Float Float
+            deriving (Show, Eq)
+```
+
+并且
+
+```haskell
+movePointN :: Float -> Vector -> Point -> Point
+movePointN n (Vector vx vy) (Point x y) 
+  = Point (n * vx + x) (n * vy + y)
+```
+
+于是
+
+> ```haskell
+> movePointN 5 (Vector 1 3) (Point 0 0)   ⇒   Point (5 * 1 + 0) (5 * 3 + 0)   ⇒   Point 5 15
+> ```
+
+当然，我们也是可以这样用的
+
+```haskell
+data Colour = Colour Int Int Int Int  -- red, green, blue, and opacity component
+            deriving (Show, Eq)
+red :: Colour
+red = Colour 255 0 0 255
+```
+
+### 枚举和构造函数
+
+用data自定义类型的时候，可以用枚举，也可以用构造函数，换句话说就是分别对应c++里enum和class/struct。为方便记忆，把上面的内容在下面复制了一份
+
+```haskell
+data Day
+  = Sunday
+  | Monday
+  | Tuesday
+  | Wednesday
+  | Thursday
+  | Friday
+  | Saturday
+  deriving (Enum)
+  
+data Vector = Vector Float Float
+            deriving (Show, Eq)
+```
+
+使用上也是一样的，一个变量被申明为Day类型:`day :: Day`，那么这个变量就可以被赋值为Day中的文字量，如果一个变量被申明为Vector类型:`vec :: Vector`，那么这个变量就可以通过构造函数赋给一个值，如前面的red，当然在需要一个Vector的地方，可以直接把构造函数带入。
+
+实际上还可以组合起来使用
+
+```haskell
+data PictureObject 
+  = Path    [Point]                   Colour LineStyle 
+  | Circle  Point   Float             Colour LineStyle FillStyle 
+  | Ellipse Point   Float Float Float Colour LineStyle FillStyle 
+  | Polygon [Point]                   Colour LineStyle FillStyle
+  deriving (Show, Eq)
+```
+
+其中的Path，Circle，Ellipse，Polygon都是已定义的类型的构造函数。于是，PictureObject就相当于一个抽象类，并且实际上限定了其有哪些具体类。
