@@ -923,3 +923,176 @@ data PictureObject
 ```
 
 其中的Path，Circle，Ellipse，Polygon都是已定义的类型的构造函数。于是，PictureObject就相当于一个抽象类，并且实际上限定了其有哪些具体类。
+
+### Records
+
+```haskell
+data Colour
+  = Colour { redC      :: Int
+           , greenC    :: Int
+           , blueC     :: Int
+           , opacityC  :: Int
+           }
+  deriving (Show, Eq)
+  
+red :: Colour
+red = Colour{redC = 255, opacityC = 255, blueC = 0, greenC = 0}
+```
+
+代码足以说明问题。record好熟悉的名字，似乎是Basic还是Fortran的自定义数据类型？
+
+### Projection functions and field names
+
+注意这里
+
+```haskell
+greenComponent :: Colour -> Int
+greenComponent Color{redC = red, opacityC = alpha, blueC = blue, greenC = green}
+  = green
+```
+
+redC被一个Colour *red*绑定或者说赋值了，其他几个域也是类似的情况，为什么呢？
+
+在haskell中，对record中的域名，自动定义了类似如下的函数
+
+```haskell
+redC     :: Colour -> Int
+greenC   :: Colour -> Int
+blueC    :: Colour -> Int
+opacityC :: Colour -> Int
+```
+
+这种函数称为Projection function，这些函数的意义就是把传入的参数当中对应的字段值取出来，比方说redC就是把red当中的redC的值取出来。
+
+因为域都有名字，所以可以
+
+```haskell
+greenComponent :: Colour -> Int
+greenComponent Color{greenC = green} = green
+```
+
+未指定的值就按缺省值处理。
+
+还可以定义个柯里化版本的greenComponent
+
+```haskell
+greenComponent :: Colour -> Int
+greenComponent = greenC
+```
+
+注意一下
+
+```haskell
+isOpaqueColour :: Colour -> Bool
+isOpaqueColour (Colour _ _ _ opacity) = opacity == 255
+
+isOpaqueColour :: Colour -> Bool
+isOpaqueColour colour = opacityC colour == 255
+```
+
+上面当然是等价的，不过要注意这里并不是用opacityC代替了isOpaqueColour这个函数，而是在isOpaqueColour函数里调用了opacityC，colour是传入的参数。
+
+在haskell中有这么个奇怪的处理，就是域名是全局的，从而projection函数也必然是全局的
+
+```haskell
+data Point
+  = Point { x :: Float, y :: Float}
+
+data Vector
+  = Vector { x :: Float, y :: Float}  -- Error: conflicting definitions of `x` and `y`
+```
+
+所以
+
+```haskell
+data Point
+  = Point { xPoint :: Float
+          , yPoint :: Float}
+  deriving (Show, Eq)
+
+data Vector
+  = Vector { xVector :: Float
+           , yVector :: Float}
+  deriving (Show, Eq)
+```
+
+可以想象，这是很令人恼火的事情。不过有个例外，就是在同一个数据类型的定义中，不同的构造函数的域可以有相同的名字，只要他们的类型相同
+
+```
+data PictureObject 
+  = Path    
+    { pointsPO    :: [Point] 
+    , colourPO    :: Colour
+    , lineStylePO :: LineStyle
+    }
+  | Circle  
+    { centerPO    :: Point
+    , radiusPO    :: Float
+    , colourPO    :: Colour
+    , lineStylePO :: LineStyle
+    , fillStylePO :: FillStyle 
+    }
+  | Ellipse 
+    { centerPO    :: Point
+    , widthPO     :: Float
+    , heightPO    :: Float
+    , rotationPO  :: Float
+    , colourPO    :: Colour
+    , lineStylePO :: LineStyle
+    , fillStylePO :: FillStyle
+    }
+  | Polygon 
+    { pointsPO    :: [Point]
+    , colourPO    :: Colour
+    , lineStylePO :: LineStyle
+    , fillStylePO :: FillStyle 
+    }
+  deriving (Show, Eq)
+```
+
+另外注意分隔符，这里说的是`,`，总是放在一行的开头，而不是一句的末尾。
+
+```haskell
+movePointN :: Float -> Vector -> Point -> Point
+movePointN n vector point
+  = Point { xPoint = n * xVector vector + xPoint point 
+          , yPoint = n * yVector vector + yPoint point
+          }
+```
+
+这里要注意的是projection函数的优先级比`*`要高，所以都不用加括号。
+
+### Record updates
+
+我们可以直接更新record中的域，而不需要另外构造一个函数或者什么的。
+
+```haskell
+<Expr> { <FieldName1> = <Expr1>, … <FieldNameN> = <ExprN> }
+```
+
+`<Expr>`指一个表达式，或者是个构造函数，或者就是某个数据类型，只要最终这个表达式计算出来的值拥有`{}`中列出来的域，比方说
+
+> ```haskell
+> (Point 10 20){ xPoint = 0 }   ⇒   Point 0 20
+> ```
+
+还可以比较下
+
+```haskell
+fade :: Colour -> Colour
+fade Colour{ redC = red, opacityC = alpha, blueC = blue, greenC = green }
+  = Colour{ redC     = red
+          , greenC   = green
+          , blueC    = blue
+          , opacityC = max 0 (opacity - 10)
+          }
+```
+
+和
+
+```haskell
+fade :: Colour -> Colour
+fade colour = colour{opacityC = max 0 (opacityC colour - 10)}
+```
+
+当然，其实就是忽略没有涉及到的字段。
