@@ -890,7 +890,7 @@ red :: Colour
 red = Colour 255 0 0 255
 ```
 
-### 枚举和构造函数
+###枚举和构造函数
 
 用data自定义类型的时候，可以用枚举，也可以用构造函数，换句话说就是分别对应c++里enum和class/struct。为方便记忆，把上面的内容在下面复制了一份
 
@@ -1096,3 +1096,178 @@ fade colour = colour{opacityC = max 0 (opacityC colour - 10)}
 ```
 
 当然，其实就是忽略没有涉及到的字段。
+
+### 构造函数与函数
+
+- 对于普通的函数，我们在引用到的地方，或者说调用的时候，会得到一个值，而不能把这个函数的参数展开并通过模式匹配赋给或者绑定到相应的变量上。
+- 对于构造函数，我们也最终得到一个值，并且可以把参数展开，通过模式匹配赋给或者说绑定到相应的变量上。
+- 因此，构造函数也被称为free或者uninterpreted函数，只保存而不处理其参数。
+
+比方说这个 函数
+
+```haskell
+showComponents :: PictureObject -> String
+showComponents pic
+  = case pic of
+      Path points colour lineStyle
+        -> "The value is the result of the application of `Path` to " ++
+           show points ++
+           " and " ++
+           show colour ++
+           " and " ++
+           show linestyle
+      Circle ...
+```
+
+showComponents是个普通函数，pic是个PictureObject，必然通过构造函数产生，因此我们调用ShowComponents函数的时候，就如函数定义里描述的一样，把pic的构造函数展开，并且通过对PictureObject构造函数的模式匹配，找到了相应的分支。
+
+构造函数也是可以柯里化的
+
+```haskell
+zeroX :: Float -> Point
+zeroX = Point 0
+```
+
+zeroX是对Point构造函数做的一个部分化处理，是一个柯里化的函数，因此，`zeroX 5`就等于`Point 0 5`。
+
+构造函数只有其所有参数都被应用之后，也就是说其所有参数都用到了或者每一个参数都被赋值了，才能够被用于模式匹配，因此，光是从`zeroX`我们是没有办法抽取出`0`的，因为zeroX的定义中并没有这个参数存在，而如果我们使用了一个参数来调用zeroX，就可以抽取或者展开其参数了，因为这时候实际上是对Point的调用。
+
+### Generalised syntax for algebraic data types
+
+比方说
+
+```haskell
+data Point = Point Float Float
+```
+
+变成
+
+```hasekll
+data Point where
+  Point :: Float -> Float -> Point
+```
+
+也就是说，`=`被`where`代替，同时函数的定义直接使用函数签名。
+
+一个略复杂的例子
+
+```haskell
+data PictureObject where
+  Path    :: [Point] ->                            Colour -> LineStyle              -> PictureObject
+  Circle  :: Point   -> Float ->                   Colour -> LineStyle -> FillStyle -> PictureObject
+  Ellipse :: Point   -> Float -> Float -> Float -> Colour -> LineStyle -> FillStyle -> PictureObject
+  Polygon :: [Point] ->                            Colour -> LineStyle -> FillStyle -> PictureObject
+```
+
+或者使用record
+
+```haskell
+data PictureObject where
+  Path :: { pointsPO    :: [Point] 
+          , colourPO    :: Colour
+          , lineStylePO :: LineStyle
+          } -> PictureObject
+  ⋯
+```
+
+不过这种句法是个扩展，需要加上
+
+```haskell
+{-# LANGUAGE GADTSyntax #-}
+```
+
+### Record Puns and Wildcards
+
+我们先回忆一下，在使用record句法定义数据类型的情况下，
+
+```haskell
+greenComponent :: Colour -> Int
+greenComponent Color{greenC = green} = green
+```
+
+的意思是，greenComponent函数接受一个Colour类型的参数，这个参数的greenC字段的值是green，greenComponent返回的就是这个值green。
+
+也可以使用projection函数
+
+```haskell
+greenComponent :: Colour -> Int
+greenComponent colour = greenC colour
+```
+
+如前所述，greenC是自动生成的projection函数。
+
+如果加上如下称为*record punning*扩展的pragma
+
+```haskell
+{-# LANGUAGE NamedFieldPuns #-}
+```
+
+还可以使用更简洁的方式
+
+```haskell
+greenComponent :: Colour -> Int
+greenComponent Color{greenC} = greenC  -- with punning
+```
+
+等价于
+
+```haskell
+greenComponent :: Colour -> Int
+greenComponent Color{greenC = greenC} = greenC   -- without punning
+```
+
+也就是说greenC在形式上是一种双关。实际上我们在调用greenComponent的时候，Color参数必然已经构造好或者就是个构造函数，我们知道greenC是其定义中的一个域，而greenComponent的返回值是这个域的值，但是这里形式上把域名和域的值都用一个标识符greenC来表示了，这也就是所谓的双关的意思。
+
+因此我们可以这样构造一个Colour变量
+
+```haskell
+red = Colour{redC, opacityC, blueC, greenC}
+  where
+    redC     = 255
+    opacityC = 255
+    blueC    = 0
+    greenC   = 0
+```
+
+比较一下
+
+```haskell
+red :: Colour
+red = Colour 255 0 0 255
+```
+
+或者
+
+```haskell
+red :: Colour
+red = Colour{redC = 255, opacityC = 255, blueC = 0, greenC = 0}
+```
+
+最后我们还可以使用通配符，加上`{-# LANGUAGE RecordWildCards #-}`
+
+```haskell
+red = Colour{..}
+  where
+    redC     = 255
+    opacityC = 255
+    blueC    = 0
+    greenC   = 0
+```
+
+projection函数
+
+```haskell
+greenComponent :: Colour -> Int
+greenComponent Color{..} = greenC   -- with wildcard punning
+```
+
+以及
+
+```haskell
+brightGreenOpacity :: Colour -> Int
+brightGreenOpacity Color{greenC = 255, ..} = opacityC
+brightGreenOpacity _                       = error "green not saturated"
+```
+
+这里意思是如果一个Colour对象的greenC的值为255，就返回其opacityC，否则返回一条error提示。
+
