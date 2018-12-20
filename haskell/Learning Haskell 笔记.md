@@ -1271,3 +1271,27 @@ brightGreenOpacity _                       = error "green not saturated"
 
 这里意思是如果一个Colour对象的greenC的值为255，就返回其opacityC，否则返回一条error提示。
 
+## More about Algebraic Data Types
+
+### Parameterised Data Types
+
+``` haskell
+data Maybe a
+   = Just a
+   | Nothing
+```
+
+也就等价于
+
+```haskell
+data Maybe a where
+    Just     :: a -> Maybe a
+    Nothing  ::      Maybe a
+```
+
+前者的意思是，对于任意的类型a，可以是*Nothing*，也可以是*Just x*，其中*x*是一个*a*类型的值；
+
+后者的*Just*这个构造函数，有一个*a*类型的值为参数，返回*Maybe a*；*Nothing*则是一个*Maybe a*类型的常量。
+
+总之*Maybe a*是一个数据类型
+
