@@ -1,7 +1,11 @@
 # Python笔记  
 
-  
+[TOC]
+
+
+
 ### 2.1.1. Argument Passing 
+
 `python3 -c 'import sys;print(sys.argv[0]);print(sys.argv[1]),print(sys.argv[2])' 1 2`
 输出为:   
 
@@ -9,28 +13,29 @@
 -c
 1
 2  
-```  
-可见argv[0]:-c argv[1]:1 argv[2]:2....
-总之从argv[1]开始是传入并且由command或者module或者file处理的参数，而argv[0]则要看具体传递的形式，或者是“-c”本身或者是个文件名等等。    
+```
+可见`argv[0]:-c` `argv[1]:1` `argv[2]:2`....
+总之从argv[1]开始才是传入并且由command或者module或者file处理的参数，而argv[0]则要看具体传递的形式，或者是“-c”本身或者是个文件名等等。    
+
 ### 2.2.1. Source Code Encoding 以及shell脚本
 `# -*- coding: cp1252 -*-`  
-  
+
 或者
-  
-```  
+
+```  bash
 #!/usr/bin/env python3
 # -*- coding: cp1252 -*-  
 ```
 第二个例子还说明了用python写shell脚本的方式  
 ### 3.1.1. Numbers 幂运算  
- 
+
 ```python  
 >>> 5 ** 2  # 5 squared
 25
 >>> 2 ** 7  # 2 to the power of 7
 128  
-```  
-### 3.1.1. Numbers 变量'_' 
+```
+### 3.1.1. Numbers 变量`_`
 ```python  
 >>> tax = 12.5 / 100
 >>> price = 100.50
@@ -41,10 +46,10 @@
 >>> round(_, 2)
 113.06  
 ```
-互动模式下，_代表上一条刚打印的表达式，这是个只读变量  
+互动模式下，`_`代表上一条刚打印的表达式，这是个只读变量  
 ### 3.1.2. Strings escape以及raw string  
 作为参数调用print时escape才起作用  
- 
+
 ```python 
 >>> '"Isn\'t," she said.'
 
@@ -69,7 +74,7 @@ raw string
 ```python
 >>> print(r'C:\some\name')  # note the r before the quote
 C:\some\name
-```  
+```
 ### 3.1.2. Strings 多行输入以及\的作用  
 一个string分成多行输入时，\可以取消编辑时输入的换行符  
 
@@ -84,7 +89,7 @@ C:\some\name
 Usage: thingy [OPTIONS]
      -h                        Display this usage message
      -H hostname               Hostname to connect to
-```  
+```
 ```python
 >>> print("""
 ... Usage: thingy [OPTIONS]
@@ -97,7 +102,7 @@ Usage: thingy [OPTIONS]
 Usage: thingy [OPTIONS]
      -h                        Display this usage message
      -H hostname               Hostname to connect to
-```  
+```
 ```python
 >>> print("""\
 ... Usage: thingy [OPTIONS]\
@@ -107,7 +112,7 @@ Usage: thingy [OPTIONS]
 ```
 ```python
 Usage: thingy [OPTIONS]     -h                        Display this usage message     -H hostname               Hostname to connect to
-```  
+```
 ### 3.1.2. Strings index以及slice  
 ```python
 >>> text='python'
@@ -124,13 +129,13 @@ Usage: thingy [OPTIONS]     -h                        Display this usage message
 |P |y |t |h |o |n |
  0  1  2  3  4  5  6
 -6 -5 -4 -3 -2 -1
-```  
+```
 所以  
 
 ```python  
 text[0]==text[-6]==‘P’  
 text[-1]=text[5]=’n’
-```  
+```
 
 因为-0==0，负索引从-1开始，也就是说最后一个字符索引是-1,第一个字符是-len(string)
 
@@ -159,7 +164,7 @@ slice的索引范围是个半开区间，也就是[b,e)这样的区间`text[-2:]
 ... 'thon')
 >>> text
 'python'
-```  
+```
 ### 3.1.3. Lists append/replace/remove/clear  
 list是mutable的，string是immutable的  
 
@@ -176,8 +181,8 @@ list是mutable的，string是immutable的
 >>> cubes.append(7 ** 3)  # and the cube of 7
 >>> cubes
 [1, 8, 27, 64, 125, 216, 343]  
-```  
-*******  
+```
+*******
 ```python
 >>> letters =['a', 'b', 'c', 'd', 'e', 'f', 'g']
 >>> letters
@@ -190,7 +195,7 @@ list是mutable的，string是immutable的
 >>> letters[2:5] =['C', 'D', 'E']
 >>> letters
 ['a', 'b', 'C', 'D', 'E', 'f', 'g']  
-```  
+```
 
 可以remove一些值  
 
@@ -198,7 +203,7 @@ list是mutable的，string是immutable的
 >>> letters[2:5] =[]
 >>> letters
 ['a', 'b', 'f', 'g']  
-```  
+```
 
 可以清空一个list  
 
@@ -219,7 +224,7 @@ list是mutable的，string是immutable的
 ['a', 'b', 'c']
 >>> x[0][1]
 'b'   
-```  
+```
 ### 4.2. for Statements range的copy及改变  
 ```python
 >>> for w in words:
@@ -297,7 +302,7 @@ f(100)
 ```python
 f100=func(100)
 f100
-```  
+```
 ### 4.7.1. Default Argument Values 及in和is None  
 
 ```python
@@ -369,7 +374,7 @@ def parrot(voltage, state='a stiff', action='voom', type='Norwegian Blue'):
     print("if you put", voltage, "volts through it.")
     print("-- Lovely plumage, the", type)
     print("-- It's", state, "!")  
-~~~  
+~~~
 这个函数接受一个required实参(voltage),三个可选实参(state,action,type)。keyword参数出现的顺序任意的，毕竟已经提供参数名字了，还要求顺序对程序员来说显得略多余。  
 下面这样调用都是非法的：  
 
@@ -378,7 +383,7 @@ parrot()                     # 缺少参数
 parrot(voltage=5.0, 'dead')  # 在keyword参数之后不允许再出现非keyword参数
 parrot(110, voltage=220)     # voltage重复了
 parrot(actor='John Cleese')  # actor未知参数
-~~~  
+~~~
 
 [^参数]: 这里用参数还是实参犹豫了一阵子，虽然parameter和argument意义是不同的，前者指函数定义处的参数，也就是形式参数或者形参，后者指函数调用时的参数，也就是实际参数或者实参，不过在不会混淆的情况下还是会使用参数  
 ***
@@ -391,7 +396,7 @@ def cheeseshop(kind, *arguments, **keywords):
     print("-" * 40)
     for kw in keywords:
         print(kw, ":", keywords[kw])
-~~~  
+~~~
 复习一下`print("-" * 40)`这种字符串生成方式，以及注意一下arguments和keywords在函数中的使用方式。  
 这个函数可以这样调用  
 
@@ -401,13 +406,13 @@ cheeseshop("Limburger", "It's very runny, sir.",
            shopkeeper="Michael Palin",
            client="John Cleese",
            sketch="Cheese Shop Sketch")  
-~~~  
+~~~
 `*arguments`是个元组:  
 `("It's very runny, sir.","It's really very, VERY runny, sir.")`
 `**keywords"`则是个字典:  
 `{"shopkeeper":"Michael Palin","client":"John Cleese",      "sketch":"Cheese Shop Sketch"}`  
 ***_注意并且理解参数列表中的顺序。_***
-  
+
 ### 4.7.4. Unpacking Argument Lists `*`和`**`  
 
 ~~~python
@@ -428,7 +433,7 @@ args是个list,用元组也是可以的，但是args必须加上`*`号
 >>> d = {"voltage": "four million", "state": "bleedin' demised", "action": "VOOM"}
 >>> parrot(**d)
 -- This parrot wouldn't VOOM if you put four million volts through it. E's bleedin' demised !  
-~~~  
+~~~
 同样的，d也必须加上`**`号
 可以这么认为,`*`解开一个list或者元组,`**`解开一个dict.  
 实际上`*`把list或者元组外面的括号去掉,使之成为一个序列.而`**`则要复杂一些,解开之外,还要给相应的形参赋值.
@@ -466,7 +471,7 @@ SyntaxError: can't use starred expression here
 42
 >>> f(1)
 43
-```  
+```
 第4行生成了一个函数对象**f**:x->x+42[^函数]，接下来第5和第7行是对这个函数**f**的调用，而不是对函数make_incrementor的调用。  
 
 [^函数]: 好吧，这个函数的写法是数学意义上的函数的写法，理解就行  
@@ -476,7 +481,7 @@ SyntaxError: can't use starred expression here
 >>> pairs.sort(key=lambda pair: pair[1])
 >>> pairs
 [(4, 'four'), (1, 'one'), (3, 'three'), (2, 'two')]
-```  
+```
 
 lamda表达式作为参数传入了sort函数，需要注意的是必须使用keyword实参的形式传入。  
 **注意**：这里只是说明了在函数的语境中lamda表达式的使用：作为返回值或者参数。  
@@ -498,7 +503,7 @@ four
 2
 3
 4
-```  
+```
 ### 4.7.6. Documentation Strings:`__doc__`  
 
 ```python
@@ -527,7 +532,7 @@ Do nothing, but document it.
 	
 	No, really, it doesn't do anything.
 
-```  
+```
 第一个例子是惯常的函数文档的写法，第二个只是复习一下相关内容。
 
 ### 4.7.7. Function Annotations: `__annotations__`  
@@ -1263,7 +1268,7 @@ C>
  'thread_info', 'version', 'version_info', 'warnoptions']
 ```
  如果调用`dir()`时没有提供参数,则返回到调用处为止之前所有的名字
- 
+
 ```python
 >>> a = [1, 2, 3, 4, 5]
 >>> import fibo,sys
@@ -1381,7 +1386,7 @@ bc
 ```
 也就是说,只有看到`.`或者`..`的时候解释器才会以当前模块的名字为出发点组织一个相对导入。这一点对任何module都是一样的，所以导入当前目录的module时，不要画蛇添足的使用`from . import module`。  
 **因此在主模块中可以从当前目录导入一个模块而不使用绝对导入,记得不要加`.`。**
-### 6.4关于import的一个正确的实例###
+### 6.4 关于import的一个正确的实例
 虽然文档上对于导入做了不少说明，然而实际使用的时候各种与import相关的错误仍然层出不穷，并且看文档也似乎解决不了问题。  
 总的来说，python的import跟c/c++的include的处理是不大一样的，这里并不打算探讨其内在逻辑，只是给出一个正确但不承诺完备的例子：
 
