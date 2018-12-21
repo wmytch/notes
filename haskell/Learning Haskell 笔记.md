@@ -1293,5 +1293,96 @@ data Maybe a where
 
 后者的*Just*这个构造函数，有一个*a*类型的值为参数，返回*Maybe a*；*Nothing*则是一个*Maybe a*类型的常量。
 
-总之*Maybe a*是一个数据类型
+### Recursive Type Constructors
+
+```haskell
+data List a
+  = Cons a (List a)
+  | Nil
+```
+
+或者
+
+```haskell
+data List a where
+  Cons :: a -> List a -> List a
+  Nil  ::                List a
+```
+
+可以看到，这里出现了递归，当然这不是什么问题。只不过可以通过上面那种方式理解下面这种方式的意义。Cons也就是`:`，这是个构造函数，Nil也就是`[]`，是个常量。
+
+### Binary trees
+
+```haskell
+data BinaryTree a
+  = Node a (BinaryTree a) (BinaryTree a)
+  | Leaf
+```
+
+或者
+
+```haskell
+data BinaryTree a where
+   Node :: a  -> BinaryTree a -> BinaryTree a -> BinaryTree a
+   Leaf ::  
+```
+
+二叉树并没有简便的语法糖来表示，所以只能这样来表示
+
+```haskell
+Node 5 Leaf Leaf
+Node 5 (Node 6 Leaf Leaf) Leaf
+Node 6 (Node 5 Leaf Leaf) Leaf
+Node 6 Leaf (Node 5 Leaf Leaf)
+Node 5 Leaf (Node 6 Leaf Leaf)
+```
+
+当然，这是5棵不同的树。
+
+接下来两个基本操作，插入和查找
+
+```haskell
+-- precondition: tree is sorted in increasing order
+-- postcondition: return tree is sorted in increasing order
+insertTree :: Ord a => a -> BinaryTree a -> BinaryTree a
+insertTree x Leaf
+  = Node x Leaf Leaf
+insertTree newValue (Node nodeValue leftSubtree rightSubtree)
+  | newValue < nodeValue = Node nodeValue (insertTree newValue leftSubtree) rightSubtree
+  | otherwise            = Node nodeValue leftSubtree (insertTree newValue rightSubtree)
+```
+
+```haskell
+-- precondition: tree is sorted in increasing order
+sElementTree :: Ord a => a -> BinaryTree a -> Bool
+isElementTree x Leaf = False
+isElementTree value (Node nodeValue leftSubtree rightSubtree)
+  | value == nodeValue  = True     
+  | value  <  nodeValue = isElementTree value leftSubtree 
+  | otherwise           = isElementTree value rightSubtree
+```
+
+最后，这里的疑问是，实际生产中一棵树怎么表示，因此，这里只是作为递归的范例，而不是生产上即时可用的数据类型。
+
+### 新类型
+
+```haskell
+type String = [Char]
+```
+
+String和[char]是同义词，可以相互交换使用
+
+而
+
+```haskell
+data Celsius    = Celsius    Float
+data Fahrenheit = Fahrenheit Float
+```
+
+Celsius和Fahrenheit是两个不同的类型，不能互换使用。为了强调这是对原有类型的不同的封装，haskell提供了newtype声明。
+
+```haskell
+newtype Celsius    = Celsius    Float
+newtype Fahrenheit = Fahrenheit Float
+```
 
