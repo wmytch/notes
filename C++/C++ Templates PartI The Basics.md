@@ -1,4 +1,4 @@
-# C++ Templates
+# C++ Templates  PartI:The Basics
 
 [TOC]
 
@@ -11,7 +11,7 @@
 
 #### 1.1.1 Defining the Template
 
-- 关于“even if the two values are equivalent but not equal”，意思就是两个值是`<=`而不是`==`。因此
+- 关于“even if the two values are equivalent but not equal”，意思就是两个值是`<=`或者`>=`而不是`==`。因此
 
   ~~~c++
   template<typename T>
@@ -33,7 +33,7 @@
 
   采用这样的比较顺序，对max函数来说，如果`a==b`,那么返回的必定是第二个参数`b`，同样的对于min函数，如果`a==b`,返回的也是第二个参数`b`。总的来说这是一种很微妙的处理，只有到了一定的深度才会需要去考虑这个问题。
 
-- 模板定义时不能用struct代替typename，struct没有作为模板参数类型限定符的语义。
+- 模板定义时不能用`struct`代替`typename`，`struct`没有作为模板参数类型限定符的语义。
 
 ####　1.1.2 Using the Template
 
@@ -162,9 +162,9 @@ f(); //没问题，没有推断，只是取了缺省的类型
 
 ### 1.3 Multiple Template Parameters
 
-- template<typename T> //T是template parameter
+- `template<typename T> `  T是template parameter
 
-- T max(T a,T b)  //a和b是call parameters
+- `T max(T a,T b)`  a和b是call parameters
 
 - 考虑这种情况
 ~~~C++
@@ -323,7 +323,7 @@ auto f=::max<double>(4,7.2); //RT=double T1=int T2=double
   };
   ~~~
 
-  是等价的，但是<T>这样的表达通常表示一些对特殊参数的特殊处理，所以还是用第一种方式比较好。
+  是等价的，但是`<T>`这样的表达通常表示一些对特殊参数的特殊处理，所以还是用第一种方式比较好。
 
 - 模板声明必须是全局的。
 
@@ -460,7 +460,7 @@ MyClass<int*,int*> m; //MyClass<T,T>?MyClass<T1*,T2*>?。不过可以通过提�
 											//来解决这个问题
 ~~~
 
-事实上，我们还可以看到，特化并不以templalte<...>表达式中的参数个数为依据。
+事实上，我们还可以看到，特化并不以`templalte<…>`表达式中的参数个数为依据。
 
 ### 2.8 Type Alias
 
@@ -484,7 +484,7 @@ template<typename T>
 using DequeStack=Stack<T,std::deque<T>>;
 ~~~
 
-这里不能用typedef，因为不能用template<typename T>修饰typedef。所以只能这样
+这里不能用`typedef`，因为不能用`template<typename T>`修饰`typedef`。所以只能这样
 
 ~~~C++
 template<typename T>
@@ -498,7 +498,7 @@ int main()
 }
 ~~~
 
-换句话说，using除了可以在模板内引入一个别名之外，还可以在模板外使用，这种用法生成的名字被称为**别名模板**，注意，只是一个别名，并没有生成新的模板定义，所以`DequeStack<int>`和`Stack<int,std::deque<int>>`指的是同样的一个东西。
+换句话说，`using`除了可以在模板内引入一个别名之外，还可以在模板外使用，这种用法生成的名字被称为**别名模板**，注意，只是一个别名，并没有生成新的模板定义，所以`DequeStack<int>`和`Stack<int,std::deque<int>>`指的是同样的一个东西。
 
 #### Alias Templates for Member Types
 
@@ -527,7 +527,7 @@ using MyTypeIterator=typename MyType<T>::iterator;
 MyTypeIterator<int> pos;  //与typename MyType<T>::iterator pos;等价的
 ~~~
 
-注意上面的typename是必须的，因为我们定义的确实是类型而不是变量。跟上面一样，在这里是不能使用typedef来引入一个别名的。
+注意上面的`typename`是必须的，因为我们定义的确实是类型而不是变量。跟上面一样，在这里是不能使用`typedef`来引入一个别名的。
 
 #### Type Traits Suffix _t
 
@@ -584,7 +584,7 @@ Stack (T elem):elems({std::move(elem)}){
 
 于是`Stack stringStack(“bottom”); `可以推断出`Stack<std::string>`。
 
-然而`Stack stringStack=“bottom”;`虽然可以推断出`Stack<std::string>`,但是这个语句是通不过编译的，因为，这里的“buttom”是个字符串常量，而不是一个std::string，这就与构造函数的参数不符了，这里并不会发生自动类型转换。所以要么强制转换成std::string,要么把推断指引去掉，但是这时候就会推断成Stack<char const [7]>了。
+然而`Stack stringStack=“bottom”;`虽然可以推断出`Stack<std::string>`,但是这个语句是通不过编译的，因为，这里的`“buttom”`是个字符串常量，而不是一个`std::string`，这就与构造函数的参数不符了，这里并不会发生自动类型转换。所以要么强制转换成`std::string`,要么把推断指引去掉，但是这时候就会推断成`Stack<char const [7]>`了。
 
 ### 2.10 Templatized Aggregates
 
@@ -741,7 +741,7 @@ stringStack.push("hello"); //这里hello会被转换为std::string,或者说生�
 														//另外要注意的是，这里跟前面所说的模板参数不能从字符串文本推断出std::string或者构造函数没有把字符串文本参数自动转换成std::string对象不是一回事。
 ~~~
 
-另外，前面所说的对非类型参数的限制也同样适用于auto，比方说不能传个浮点数进去。
+另外，前面所说的对非类型参数的限制也同样适用于`auto`，比方说不能传个浮点数进去。
 
 ## Chapter 4 Variadic Templates
 
@@ -786,7 +786,7 @@ void print(T firstArg,Types... args)
 
 这样也是可以的。
 
-#### 4.1.3 Operator sizeof...
+#### 4.1.3 Operator `sizeof…`
 
 ~~~C++
 template<typename T,typename... Types>
@@ -994,7 +994,7 @@ printByIdx(t,Indices<0,1,2>());
 
 ## Chapter 5 Tricky Basics
 
-### 5.1 Keyword typename
+### 5.1 Keyword `typename`
 
 ### 5.2 Zero Initialization
 
@@ -1024,7 +1024,7 @@ template<typename T>
 void foo(T p{}){}  //这是不对的，只能用foo(T p=T{})
 ~~~
 
-### 5.3 Using this->
+### 5.3 Using `this->`
 
 对于一个类模板，如果其基类也依赖于模板参数，使用一个名字，比方说x，与this->x是不一样的，即使这个x是继承来的。
 
@@ -1990,262 +1990,4 @@ f(2);  //参数是右值，T为int,p为int&&
 - 准备好处理模板参数是引用时引发的问题，特别的，可能需要确保返回值不是个引用
 - 声明递归的数据结构时，要注意不完整类型的支持
 - 重载所有的数组类型，`T []`，`T (&)[]`，`T (&)[SZ]`，`T *`而不仅仅是`T [SZ]`
-
-## Chapter 12 Fundamentals in Depth
-
-### 12.1 Parameterized Declarations
-
-目前C++支持4种基本模板：类模板，函数模板，变量模板，以及别名模板。它们可以出现在名字空间范围(全局或者名字空间)也可以出现在类范围内。在类范围内他们就变成嵌套类模板，成员函数模板，静态数据成员模板，以及成员别名模板。在C++17中还引入了推断指引。
-
-```c++
-template<typename T>   //名字空间范围类模板
-class Data
-{
-  public:
-  	static constexpr bool copyable=true; //新标准，注意constexpr,这样不需要在别的地方初始化了
-};
-
-template<typename T>  //名字空间范围函数模板
-void log(T x){
-  ...
-}
-
-template<typename T>  //名字空间变量模板，自c++14
-T zero=0;
-
-template<typename T>  //同上
-bool dataCopyable=Data<T>::copyable;  
-
-template<typename T>
-using DataList=Data<T*>;  //名字空间范围别名模板
-```
-
-```c++
-class Collection
-{
-  public:
-  	template<typename T>   //在类中定义的成员类模板
-  	class Node
-    {
-      
-    };
-  	template<typename T>   //类成员函数模板，隐含为inline函数
-  	T* alloc(){
-      
-    }
-  	template<typename T>   //成员模板变量。对比上面例子中的copyable的定义
-  	static constexpr T zero=0;  //原书此处没有constexpr，这是错误的
-  	template<typename T>   //成员别名模板
-  	using NodePtr=Node<T>*
-};
-```
-
-要注意的是在c++17
-
-- 变量，包括静态数据成员，以及变量模板都***有可能***是`inline`的，这也就意味着这他们的定义可能重复出现在不同的翻译单元
-- 但是，就变量而言，必须显式的声明为inline才会是inline的。
-- 成员函数包括函数模板，在类定义内部定义时，已经隐含是inline的了
-
-```c++
-//file1.cpp
-#include <iostream>
-inline int i=1;
-//int i=1;
-int j=1;
-inline int k=1;
-
-void print();
-int main()
-{
-    print();
-    std::cout<<"i1:"<<i<<"  j1:"<<j<<"  k1:"<<k<<std::endl;
-}
-```
-
-```c++
-//file2.cpp
-#include <iostream>
-//int i=2;
-inline int i=2;
-inline int j=2;
-int k=2;
-
-void print()
-{
-    std::cout<<"i2:"<<i<<"  j2:"<<j<<"  k2:"<<k<<std::endl;
-}
-```
-
-- 先看两个文件中的`i`，这里都加了`inline`，否则编译就会出错，当然用`extern/static`修饰也是可以通过编译的，运行结果很常规，就不讨论了，只说两个`inline`的情况，输出的`i`值与编译时两个文件的顺序有关，哪个在前面，输出的值就是哪个文件里的`i`值，这个应该与编译器有关，反正两个值肯定是一样的 。
-- 而对于`k`和`j`，输出的都是非`inline`的那个。
-- 这里比较有趣的是如果两个文件分别定义两个变量为`extern int i=1`和`inline int i=2`，那么编译器会对第一个声明发出警告，输出结果则是第一个`i`的值。
-
-```c++
-#include <iostream>
-                              
-template<typename T>          
-class Data                    
-{
-    public:
-        static constexpr bool copyable = true;  
-        template<typename U>  
-        static U zero;        //如果要在这里初始化zero，则static constexpr U zero,如前所述
-};                            
-template<typename T>          
-template<typename U>          
-U Data<T>::zero=1;            //特化
-                       
-
-template<>
-template<>
-float Data<int>::zero<float> = 3.3; //特化
-
-Data<float>::zero<int> = 4; //ERROR：不能赋值
-int main()
-{
-    Data<double>::zero<float> = 2.2; //OK，赋值
-  	Data<double>::copyable=false;   //ERROR:constexpr不能赋值
-  	std::cout<<Data<int>::copyable<<" "<<Data<double>::zero<int><<std::endl;
-    std::cout<<Data<int>::copyable<<" "<<Data<double>::zero<float><<std::endl;
-    std::cout<<Data<int>::copyable<<" "<<Data<int>::zero<float><<std::endl;
-  	std::cout<<Data<int>::copyable<<" "<<Data<float>::zero<int><<std::endl;  //zero为1
-}   
-
-```
-
-- 这里主要看的是怎样实例化`zero`这个变量，以及对其引用的方法。
-- 需要注意的是在全局范围对`zero`只能初始化或者说特化，在函数里才可以赋值，当然前提是这个变量不能是const的以及constexpr的。
-- 所以，如果你需要在程序中改变一个类静态数据成员，就这类定义外部对其初始化，或者，从c++17起，使用`inline`，比方说上面的例子：`inline static bool copyable = false`，这样在函数中就可以对其赋值了。
-
-
-
-```c++
-template<typename T>
-class List
-{
-  public:
-  	List()=default;
-  	template<typename U>
-  	List(List<U> const&);
-};
-```
-
-- 注意模板构造函数取消了自动生成的缺省构造函数，所以这里需要手工生成一个缺省构造函数，以备构造`List<T>`的实例。
-- 注意这里仅仅指的是取消缺省构造函数，而模板拷贝/移动构造函数和模板赋值运算符并不会取消相应的缺省函数，但是他们会取消缺省构造函数。
-- 同样要注意的是如果不使用缺省构造函数，那么不去管它也是没问题的。
-
-#### 12.1.1 Virtual Member Functions
-
-成员函数模板不能是虚拟的 ，因为虚函数表的大小是固定的，而虚函数模板实例的数量只有到程序全部翻译之后才会知道，目前编译器和链接器尚不支持这种机制。
-
-类模板里的普通成员函数是可以虚拟的。
-
-```c++
-template<typename T>
-class Dynamic
-{
-  public:
-  	virtual ~Dynamic(); //每个Dynamic<T>实例都有一个析构函数
-  	template<typename  T2>
-  	virtual void copy(T2 const&); //错误，每一个给定的Dynamic<T>，copy()的实例数量是未知的
-};
-```
-
-尝试理解下这个问题，比方说创建一个基类`Dynamic<T>`的实例，要注意的是 ，这里每一个类是依据T来区分，而不会去考虑T2，但是创建虚函数表时，就得考虑T2，每一个T2就代表一个虚函数，如果支持虚成员函数模板，那么，这个时候其虚函数表应该有多少项？这个只能在全部程序翻译完成，知道有多少基类实例才能确定了，更糟糕的是，如果一个类继承了这个基类，同样的道理，这个子类的虚函数表又该有多少项？毕竟，基类的虚函数表有多少项尚且一时不得而知，子类的虚函数表也必然无法确定。
-
-#### 12.1.2 Linkage of Templates
-
-- 在同一个范围内类模板不能与不同实体同名
-
-```c++
-int C;
-class C;   //OK,类名与非类名属于不同的空间
-
-int X;
-template<typename T>
-class X;  //ERROR，冲突了
-
-struct S;
-template<typename T>
-struct S;  //ERROR,冲突了
-```
-
-- 模板名字不能是C链接属性的
-
-```C++ 
-extern "C++" template<T>
-void normal();  //缺省情况，链接指定可以省略
-extern "C" template<typename T>
-void invalid();  //错误，
-extern "Java"  template<typename>
-void javalink();  //非标准的，不确定什么编译器支持
-```
-
-至于原因，与在C++程序中调用C函数的要使用`"extern C”`的原因是一样的。
-
-- 模板通常具有外部链接性，当然也有例外
-  * 名字空间范围里static限定的函数模板
-  * 直接或者间接属于匿名空间的模板，这时候具有内部链接属性
-  * 匿名类的成员模板，这时候没有连接属性
-
-```c++
-template<typename T>
-void external();   //指向另一个文件的属于同一名字空间的同名实体，这是个声明
-
-template<typename T>
-static void internal();  //与其他文件中的实体无关
-
-template<typename T>
-static void internal();  //上一个声明的再次声明
-
-namespace{
-  template<typename>
-  void otherInternal();   //同样与其他文件无关，
-  												//因为namespace{
-  												//...
-  												//}等同于
-  												//namespaceXXX{
-  												//....
-  												//} 
-  												//using namespaceXXX; 
-  												//上面XXX是随机的字符组合
-}
-
-namespace{     //上面声明的再次声明
-  template<typename>
-  void otherInternal(); 
-}
-
-struct {
-  template<typename T> void f(T){};//没有链接性，不能再次声明，必须在这里定义，
-  																 //对一个匿名类，在类外部无法提供定义
-  																	//因为没有名字，无从指向
-} x;
-```
-
-- 当前模板不能在函数范围或者局部类范围内声明，某种形式的lambda表达式除外，将来会看到。
-
-- 一个模板实例的链接属性就是这个模板的链接属性。
-
-```c++
-template<typename T> T zero=T{};//其所有实例都是外部连接的，即便对于zero<int const>也是如此
-int const zero_int =int{};   //是内部链接，因为这是个cosnt类型，
-template<typename T> int const max_volume = 11;//所有实例却都是外部链接的，
-																							//即便其类型都是int const的。
-```
-
-#### Primary Template
-
-主模板的声明不需要加上`<T>`
-
-```c++
-template<typename T>class Box;
-template<typename T>class Box<T>;  //错误，不做特化
-template<typename T>void translate(T);
-template<typename T>void translate<T>(T); //错误，这种场合函数不允许这种句法，
-																					//只有在调用函数时才有可能出现，那是因为有多个模板参数，
-																					//并且其中有无法推断或者必须指定的参数
-template<typename T>constexpr T zero=T{};
-template<typename T>constexpr T zero<T> = T{}; //错误，不做特化
-```
 
