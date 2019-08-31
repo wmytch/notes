@@ -610,7 +610,7 @@ class Outer<X>::Inner<void>;  //error.
 
 上面最后的错误在于template<>不能跟在别的参数列表后面，但是跟在别的template<>后面是可以的。
 
-另外，对于前面的#8，也就是类Outer<bool>，因为这是个完全特化的类实例，不能再加template<>修饰，所以特化其成员类模板Inner时就只需要一个template<>，而这一个template<>是针对Inner的。
+另外，对于前面的#8，也就是类`Outer<bool>`，因为这是个完全特化的类实例，不能再加template<>修饰，所以特化其成员类模板Inner时就只需要一个template<>，而这一个template<>是针对Inner的。
 
 ```c++
 template<>
