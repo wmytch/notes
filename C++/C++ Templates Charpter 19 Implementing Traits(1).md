@@ -387,8 +387,8 @@ class SumPolicy
 };
 
 template<typename T,
-					template<typename,typename> class Policy=SumPolicy,
-					template<typename Traits=AccumulationTraits<T>>
+				template<typename,typename> class Policy=SumPolicy,
+				template<typename Traits=AccumulationTraits<T>>
 auto accum(T const* beg,T const* end)
 {
 	using AccT=typename Traits::AccT;
@@ -411,9 +411,9 @@ class SumPolicy
 {
   public:                     
     using SumTraits=Traits<T>;   //实际上，这里的T也是可以作为模板参数另外传入的，
-  															 //但是出于由策略自己来决定使用哪个Traits的考虑，这里用了T
-  															 //下面MultiPolicy则直接使用了float
-  															 //不必在意细节，只是示例
+  			//但是出于由策略自己来决定使用哪个Traits的考虑，这里用了T
+  			//下面MultiPolicy则直接使用了float
+  			//不必在意细节，只是示例
     using AccT=typename SumTraits::AccT; 
     static AccT accumulate(T const* beg,T const* end)
     {
