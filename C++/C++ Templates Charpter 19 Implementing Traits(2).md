@@ -125,7 +125,7 @@ struct IsDefaultConstructibleT::IsDefaultConstructibleHelper<T>::Type
 
 因此，`IsDefaultConstructibleT<T>`就根据T最终继承了`std::true_type`或者`std::false_type`，注意不是`IsDefaultConstructibleHelper<T>`。使用的时候就需要`IsDefaultConstructibleT<T>::value`，这是个bool值，与前面的例子形式上是一样的。
 
-####　我们来看看这里发生了什么。
+#### 我们来看看这里发生了什么。
 
 1. 为了决定一个类型T是否可以缺省构造一个实例，创建了两个重载函数，其返回值的类型各自不同；
 
