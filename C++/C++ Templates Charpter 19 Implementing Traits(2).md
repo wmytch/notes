@@ -223,7 +223,7 @@ namespace std
 
 ### 19.4.3 Using Generic Lambdas for SFINAE
 
-在c++17，我们可以使用泛型lambda简化前面的问题。
+在c++17，我们可以使用泛型lambda简化前面的问题。首先要说明的是decltype当中不能直接使用一个lambda表达式，下面只是出于方便说明的目的，才直接把一个lambda表达式放进decltype当中。当然，一个lambda表达式类型的变量是可以放进decltype当中的。另外，`declval<T>()`返回一个T&&类型的对象，除非T是void，这时候会返回void。
 
 ```c++
 template<typename F,typename... Args,
@@ -253,15 +253,16 @@ template<typename T>
 T valueT(TypeT<T>);
 ```
 
-我们从头开始看，这里有两个函数模板`isValidImpl()`的非定义声明，两个模板的返回值类型和参数模板列表各不相同。注意这里是函数模板重载，不是类模板，不存在主模板和部分特化，也就不存在继承缺省参数的问题。
+我们从头开始看，这里有两个函数模板`isValidImpl()`的非定义声明。注意这里是函数模板重载，不是类模板，不存在主模板和部分特化，也就不存在继承缺省参数的问题。
 
-跟以前一样，第一个模板参数列表里有个缺省参数，SFINAE就是通过这个缺省参数来实现。而与以前不同的是，在后备模板的参数列表中显式的保留了第一个参数，而不是像以前那样都作为可变长参数列表的一部分，因为缺省参数会使用到这个参数。而对于第二个模板的模板参数列表中第一个参数是可以不要的，也就是说改成`template<typename… Args>`也是可以的。
+第一个模板参数列表里有个缺省参数，SFINAE就是通过这个缺省参数来实现。而第二个模板的模板参数列表中第一个参数是可以不要的，也就是说改成`template<typename… Args>`也是可以的。
 
 对于第一个模板的缺省参数`decltype(std::declval<F>()(std::declval<Args&&>()…))`:
 
-- 我们知道declval总是能够构造出一个对象来，在这里是构造了一个类型为F的对象
-- 这个F我们已知是`isValidImpl<>`的第一个模板参数，从形式上来说，这个F是一个lambda表达式而不是一个任意的对象，这本身也是我们这里要讨论的主题。
-- 这个构造出来的lambda表达式的参数是可变长参数`std::declval<Args&&>()…`。
+- 我们知道`declval<F>()`总是能够构造出一个F&&对象来，如果将其直接作为decltype的参数，那么delctype生成的将是一个F&&类型。
+- 这个F我们已知是`isValidImpl<>`的第一个模板参数，出于我们的目的，这个F是一个lambda表达式类型，而不是一个任意的类型，注意是类型。
+- `declval<F>()`构造出来的这个F&&对象，也就是一个lambda表达式，做了一次调用，其参数是可变长参数`std::declval<Args&&>()…`，从而得到其返回值，也就是F这个lamda表达式的返回值。当然，并没有做真正的调用操作，只是通过分析句法得到而得到的一个表达式。
+- 然后通过decltype获取到F的返回值的类型，这个返回值的类型就这里而言是无关紧要的。
 
 这里还有一个问题要注意的是，对于第一个模板的参数列表，缺省参数位于可变长参数之后。通常我们不这么做，是因为这个参数无法直接获取。就此例而言所有列出来的模板实参都属于可变长参数集，然后加上一个没有显式指定的缺省参数，也就是说，缺省参数就是没有列出来的那个，但这并不是个语法错误。我们这里这样指定一个缺省参数，目的是让编译器在解析模板的时候通过这个缺省参数来决定是否匹配，或者说，我们自己是不会去使用这个缺省参数的，而是让编译器在参数替换时进行一些判断。
 
@@ -275,7 +276,7 @@ isValid接受一个参数`f`，返回如下的一个lambda表达式
 }
 ```
 
-而这个lambda表达式，则是返回一个值，要么是true_type，要么是false_type，取决于isValid的参数`f`是否可以缺省构造。
+isValid返回的这个lambda表达式，其返回值的类型或者是true_type，或者是false_type。
 
 到这里，必须要注意的是在`isValidImpl<decltype(f),decltype(args)&&…>`中对`f`的使用。按道理，`f`没有被捕获的情况下，在这个闭包里使用`f`是非法的。但是因为decltype以及declval都是针对类型进行运算，与变量的本身的值没有关系，或者说，编译器在解析模板时只是做了参数替换，还没有进入到处理函数调用的阶段，所以编译器不会报错。如果直接使用`f`，编译器就会报错了。也可以这样理解，像`decltype(f+arg) f+arg`这样的表达式，出现的两个`f+arg`是分别在编译的不同阶段处理的。
 
@@ -320,7 +321,7 @@ template<typename F,typename... Args>
 std::false_type isValidImpl(...);
 ```
 
-对于第一个声明的缺省参数，`std::declval<F>()`也就等同于`std::declval<decltype([](auto x)-> decltype((void)decltype(valueT(x))()))>()`。我们已经知道，`std::declval<F>()`无论如何都能构造出一个对象来，这个对象的类型就是其模板参数F，因此这里必然能够构造出一个具体的lambda表达式的类型。这里的问题就转化为这个lambda表达式的返回值中的`decltype(valueT(x))`所构造出来的这个类型能否缺省构造，也就是如前面所述`x=type<arg>`中的arg能否缺省构造，再次强调下，这里x不是个任意的值，而是type这个模板变量。当然，再次强调下，如果这里能够缺省构造出一个对象，这个对象也会被转换成void类型，如前所述，我们这里并不在意这一点。
+对于第一个声明的缺省参数，如前所述，`std::declval<F>()`大体上也就是`std::declval<decltype([](auto x)-> decltype((void)decltype(valueT(x))()) {})>()`，于是生成一个lambda表达式的右值引用，这个lambda表达式是`[](auto x)-> decltype((void)decltype(valueT(x))())) {}`，然后用参数`std::declval<Args&&>()...`对这个生成的对象做了一次调用，得到一个返回值类型的表达式即`decltype((void)decltype(valueT(x))()))`。最终这里的问题就转化为后面的`decltype(valueT(x))`所构造出来的这个类型能否缺省构造，也就是如前面所述`x=type<arg>`中的arg能否缺省构造，再次强调下，这里x不是个任意的值，而是type这个模板变量。当然，也要再次强调下，如果这里能够缺省构造出一个对象，这个对象也会被转换成void类型，如前所述，这里我们并不在意这一点。
 
 于是,如果x的类型可以缺省构造，那么就选择第一个isValidImpl模板，返回`std::true_type`，否则，第一个模板就被SFINAE掉，从而选择后备模板，返回`std::false_type`。
 
@@ -338,22 +339,41 @@ isDefaultConstructible(type<int>) =[](type<int>){
 如前面所述，isValidImpl还有个缺省参数，这个缺省参数此时变成
 
 ```c++
-decltype(std::declval<F>()(std::declval<decltype<type<int>>()) {})
+decltype(std::declval<F>()(std::declval<decltype<type<int>>()))
 ```
 
-如前所述`declval<F>()`生成一个类型为F的对象实例，这里F指的是什么前面说过就不再多说了，这个对象实例就是lambda表达式`[](auto x)-> decltype((void)decltype(valueT(x))()){}`，并且这个表达式的形参是x，而实际参数会是`std::declval<decltype<type<int>>()`，`decltype<type<int>>`得到`TypeT<int>`，`declval<TypeT<int>`得到一个类型为`TypeT<int>`的对象，我们姑且用x来表示。于是，isValidImpl的缺省参数最终就可以看成是
+如前所述`declval<F>()`生成一个类型为F的对象实例，这里F指的是什么前面说过就不再多说了，这个对象实例就是lambda表达式`[](auto x)-> decltype((void)decltype(valueT(x))()){}`，并且这个表达式的形参是x，而实际参数会是`std::declval<decltype<type<int>>()`，`decltype<type<int>>`得到`TypeT<int>`，`declval<TypeT<int>>`得到一个类型为`TypeT<int>`的对象，我们姑且用x来表示。于是，isValidImpl的缺省参数最终就可以看成是
 
 ```c++
-decltype([](TypeT<int> x{type<int>}) -> decltype((void)decltype(valueT(x))() {})
+decltype((void)decltype(valueT(x))())
 ```
 
-这样我们就回到了前面所讨论过的，`decltype(valueT(x))`能否缺省构造的问题，`decltype(valueT(x))`产生的类型是int，这是可以缺省构造的，换句话说就是第一个isValidImpl模板是匹配的，从而`isValidImpl<>(nullptr)`返回true_type，`decltype(true_type){}`得到的值为true，于是`isDefaultConstructible(type<int>)`就是true。
+这样问题最终就变成前面所讨论过的`decltype(valueT(x))`能否缺省构造的问题，`decltype(valueT(x))`产生的类型是int，这是可以缺省构造的，换句话说就是第一个isValidImpl模板是匹配的，从而`isValidImpl<>(nullptr)`返回true_type，`decltype(true_type){}`得到的值为true，于是`isDefaultConstructible(type<int>)`就是true。
 
 而对于`isDefaultConstructible(type<int&>)`，`int&`是不能缺省构造的，这时候引发SFINAE，选择了第二个也就是后备模板，于是最终`isDefaultConstructible(type<int&>)`就是false。
 
+细节已经说了，接下来看看这里用lambda表达式来实现SFINAE的逻辑是什么。
+
+首先，假定我们要解决的问题是判断一个类型能否缺省构造，其次我们要用lambda表达式来解决这个问题。为了实现这两个要求，我们可以构造一个lambda表达式：
+```c++
+constexpr auto isDefaultConstructible=[](auto&&... args){
+    return delctype(isValidImpl<...>(nullptr)){};//返回真或假
+}
+```
+
+我们可以通过`isDefaultConstructible(args...)`来判断`args…`是否可以缺省构造，当然，虽然这里使用了可变长参数，但是出于我们的目的，通常也只会传一个参数，而且，通过之前的讨论我们知道，这里并不是直接对`args…`本身做判断。
+
+接下来问题是，通过什么方式来返回真或假，我们上面已经看到了，这里是通过`decltype(...){}`返回一个true_type或者false_type的实例。不同的返回值类型可以通过重载isValidImpl来得到。提醒一下，这里的工作都是在编译阶段进行，所以返回一个bool值是达不到目的的。
+
+然后，怎样判断应该选择哪一个重载函数？当然这里是通过SFINAE，于是归结到isValidImpl函数上。如果只是限于判断对象能否缺省构造，也并不需要那么绕的办法，但是正如下面会说到的，可以通过isValidImpl来做很多判断，需要判断的内容可以作为其第一个模板参数传入，并在其缺省参数中进行判断。
+
+所以这里就用到了isValid，一方面，生成一个用来断言的lambda表达式，另一方面，给isValidImpl绑定一个条件，或者说，isValid就是一个工厂，生产断言lambda表达式的工厂。
+
+接下来的问题是，为什么判断的条件要用lambda表达式的形式传入，还有没有别的方式呢？当然是有的，不过这里不讨论就是了。而且，最关键的是，正如前面说的，把需要判断的内容放到一个lambda表达式的返回值表达式中，可以触发SFINAE而不是编译错误。
+
 最后我们按照时间线来捋一下这里发生了什么。
 
-- 首先是两个函数模板的声明，如以前一样，两个函数模板的返回值类型不同。声明可以先略过。
+- 首先是两个函数模板的声明，如以前一样，两个函数模板的返回值类型不同。
 
 - 接下来是isValid的定义，我们知道c++对lambda表达式的处理是生成一个类，大体上会是这样
 
@@ -387,7 +407,7 @@ decltype([](TypeT<int> x{type<int>}) -> decltype((void)decltype(valueT(x))() {})
         	IsDefaultConstructible();
         	auto operator()(auto&&... args)
             {
-                return decltype(isValidImpl<decltype(f),decltype(args)&&...>(nullptr)){});
+                return decltype(isValidImpl<decltype(f),decltype(args)&&...>(nullptr)){};
             }
     } isDefaultContstructible;
     ```
@@ -412,7 +432,7 @@ decltype([](TypeT<int> x{type<int>}) -> decltype((void)decltype(valueT(x))() {})
     => isDefaultConstructible(auto x{type<int>})
     => isDefaultConstructible.operator()(x)
        {
-       		return decltype(isValidImpl<decltype(f),decltype(x)&&>(nullptr)){})
+       		return decltype(isValidImpl<decltype(f),decltype(x)&&>(nullptr)){};
        }
     ```
 
@@ -426,7 +446,7 @@ decltype([](TypeT<int> x{type<int>}) -> decltype((void)decltype(valueT(x))() {})
 
 当然，如果没有后备模板，引发SFINAE之后没有可选的重载函数，这时候还是会引发编译错误的。
 
-上面的方法比较复杂，就在于模板的第一个参数是对函数类型的一次调用，而不是之前所采用的可指定的参数。我们也可以简化一下这里的形式
+我们也可以简化一下这里的形式
 
 ```c++
 template<typename T>
@@ -442,8 +462,7 @@ using IsDefaultConstructibleT
 constexpr auto hasFirst
 = isValid([](auto x) -> decltype((void)valueT(x).first){});
 ```
-
-*累死了，花了4天时间，终于把这节弄完，决定买包烟放松一下去。*
+这里最直接的理解就是，判断作为isValid的参数的lambda表达式的返回值类型表达式是否满足某种条件，这个返回值表达式怎么获得呢？就是通过`std::declval<F>()(std::declval<Args&&>()…)`，对F做一次调用，得到其返回值的表达式。
 
 ### 19.4.4 SFINAE-Friendly Traits
 
@@ -536,12 +555,7 @@ struct PlusResultT<T1,T2,false>
 
 最后，作为一个通用的设计原则，只要是合理的参数，特性模板在实例化时永远不应该失败，也就是说不论如何都能找到一个合适的特性模板。所以必须有一个后备模板。
 
-通常要做两次检测：
-
-1. 运算是否有效
-2. 计算其结果
-
-正如我们上面看到的，通过调用`HasPlust<>`来检测`operator+`是否有效。
+对于SFINAE友好的特性，通常的原则或者说方法是依次做两次检测：先检查操作是否合法，然后计算再其结果。这里的意思是，如果在第一步能检查出操作是不合法的，那么这时候就可以引发SFINAE，如果不分开来处理那么就有可能引发编译错误。正如我们上面看到的，首先用`HasPlust<>`来检测`PlusResultImpl<>`中的`operator+`是否有效而不是直接通过operator+来做+运算。
 
 据此，我们还可以对19.3.1的ElementT重新做个定义
 
@@ -556,7 +570,7 @@ struct HasMemberT_value_type:std::false_type
 {
 };
 template<typename T>
-struct HasMemberT_value_type<T,std::void_t<typename decltype(std::declval<T>())::value_type>>
+struct HasMemberT_value_type<T,std::void_t<typename T::value_type>>
 :std::true_type
 {
 };
@@ -595,28 +609,12 @@ int main()
 运行结果是
 
 ```bash
-container of NSt3__16vectorIbNS_9allocatorIbEEEE elements.
-container of NSt3__14listIiNS_9allocatorIiEEEE elements.
+container of b elements.
+container of i elements.
 container of A42_i elements.
 container of A3_i elements.
 ```
-
-实际上HasMemberT_value_type还可以有另外一种定义。但不论哪一种，都是一个有缺省参数的主模板，加上一个部分特化模板，而不同在于这个缺省值是什么，同时缺省值也决定了哪一个是作为后备模板。
-
-```c++
-template<typename T,typename=std::void_t<typename decltype(std::declval<T>())::value_type>>
-struct HasMemberT_value_type:std::true_type
-{
-};
-template<typename T>
-struct HasMemberT_value_type<T>
-:std::false_type
-{
-};
-```
-
-实际上这一种定义与ElementT的定义风格更加一致，或者说与之前的定义风格更加一致，也就是在主模板进行SFINAE的判断，而部分特化就作为后备模板。
-
+注意这里只是示例一下所谓SFINAE友好的特性的使用，所以对于不存在value_type的容器比方说上面的arr和va，相应的也输出了些内容。
 ## 19.5 IsConvertibleT
 
 ```c++
@@ -667,7 +665,7 @@ int main()
 
 此外，其它内容都在前面介绍过，就不废话了。
 
-### Handling Specila Cases
+### Handling Special Cases
 
 有三种情况IsConvertibleT是不能正确处理的
 
