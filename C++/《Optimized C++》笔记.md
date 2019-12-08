@@ -224,26 +224,348 @@ Profiler是一个程序，用来统计其它程序耗费的时间，用报告来
 3. 运行程序，会在磁盘上生成一个profile文件。
 4. profiler程序会以这个表格为输入，生成一个文本或者图形格式的报告，比方说适用于GCC的profiler是gprof。
 
-总之，就是加上参数编译，运行程序，程序终止后就可以找到一个profile表格文件，然后用profiler程序处理这个文件，生成一个报告。
+总之，就是加上参数编译，运行程序，程序终止后就可以找到一个profile表格文件，然后用profiler程序处理这个文件，生成一个报告。生成的报告格式也多种多样，但不管怎样，都可以很直观的看到热点，于是可以根据这份报告逐个检查热点，直到都不那么热或者找不到优化的余地为止。通常来说，用debug版本来做profile要比release版本更合适，因为debug版本会覆盖全部代码，而release版由于编译时对代码做了一些处理，会有所不同，比方说debug版本包括所有的函数调用，包括inline函数，而release版本通常inline函数已经展开了。
+
+profiler也有一些不足的地方：
+
+- profiler不会告诉你某个地方可以使用效率更高的算法。调整一个糟糕的算法是很费时间的。
+- 对于同一个输入，如果用来执行不同的任务，profiler得到的结果可能不是那么准确。比方说数据库select和insert的代码是不同的，当执行select时insert可能根本就不会进行，因此，混合了select和insert的代码，在profiler报告中可能就看不出来insert其实是个热点。所以，一次只执行一个优化。
+- 在I/O密集或者多线程的情况下，profiler的报告可能会有所误导，因为，profiler会减去系统调用或者等待事件的时间。不过，一些profiler会同时列出函数调用次数和执行时间，这也会是一个线索。
 
 ### Timing Long-Running Code
 
+如果一个程序只做一件事，profiler可以很容易的看出热点，但是如果一个程序做了很多不同的事，那么热点可能就不那么明显。这个时候就需要手工计时了。
+
+通过不断的计时缩小范围，找到候选的热点代码段，然后进行单独的实验。大多数情况下，程序员需要自己写个计时程序。
+
 #### “A Little Learning” About Measuring Time
+
+关于误差分析学生时代做过实验的都应该知道。
 
 #### Measuring Time with Computers
 
+由于各种软硬件方面的原因，对于计时产生的误差心里要有数。
+
 #### Overcoming Measurement Obstacles
+
+需要进行大量的试验以平均化各种外部因素的影响，但是不要忘记精确度和准确度是两回事。
 
 #### Create a Stopwatch Class
 
+秒表类模板
+
+```c++
+template<typename T>
+class BasicStopwatch:T
+{
+    	using BaseTimer=T;
+	public:
+    	explicit BasicStopwatch(bool start);
+    	explicit BasicStopwatch(char const* activity="Stopwatch",bool start=true);
+    	BasicStopwatch(std::ostream& log,char const* activity="Stopwatch",bool start=true);
+    
+    	~BasicStopwatch();
+    
+    	unsigned lapGet() const;
+    	bool isStarted() const;
+    	unsigned show(char const* event="show");    
+    	unsigned start(char const* event_name="start");
+    	unsigned stop(char const* event_name="stop");
+    
+    private:
+    	char const* m_activity;
+    	unsigned m_lap;
+    	std::ostream& m_log;    	
+};
+```
+
+下面是BaseTime的几个不同实现
+
+1. 使用chrono库，移植性比较好，需要c++11
+
+```c++
+#include <chrono>
+class TimerBase
+{
+    public:
+    	TimerBase():m_start(system_clock::time_point::min()){}
+    	
+    	void clear()
+        {
+            m_start=system_clock::time_point::min();
+        }
+    
+    	bool isStarted() const
+        {
+            return (m_start.time_since_epoch()!=system_clock::duraton(0));
+        }
+    
+    	void start()
+        {
+            m_start=system_clock::now();
+        }
+    
+    	unsigned long getMs()
+        {
+            if(isStarted())
+            {
+                system_clock::duraton diff;
+                diff=system_clock::now()-m_start;
+                return (unsigned)(duration_cast<milliseconds>(diff).count());
+            }
+            return 0;
+        }
+    private:
+    	system_clock::time_point m_start;
+};
+```
+2. 使用`clock()`，适用于linux和Windows
+```c++
+class TimerBaseClock
+{
+    public:
+    	TimerBaseClock() { m_start=-1;}
+    
+    	void clear() {m_start=-1;}
+    	bool isStarted() const {return m_start!=-1;}
+    
+    	void start() {m_start=clock();}
+    	unsigned long getMs()
+        {
+            clock_t now;
+            if(isStarted())
+            {
+                now=clock();
+                clock_t dt=now-m_start;
+                return (unsigned long)(dt*1000/CLOCK_PER_SEC);
+            }
+            return 0;
+        }
+    private:
+    	clock_t m_start;    	
+};
+```
+
 #### Time Hot Functions in a Test Harness
+
+如前面所说，要得到更精确的结果需要多次测量
+
+```c++
+using counter_t=unsigned;
+counter_t const iterations=10000;
+{
+    Stopwatch sw("function_to_be timed()");
+    for(counter_t i=0;i<iterations;++i)
+    {
+        result=function_to_be_timed();
+    }
+}
+```
+
+注意最外层的`{}`，这样使得sw可以使用RAII。
 
 ### Estimate Code Cost to Find Hot Code
 
+profiler可以指出最常调用的函数，或者整体运行时间中占比最高的部分，但不一定能指出问题在哪条语句上。手工计时也不一定能明确指出是哪里的问题。这时候就需要估算其中每一条语句的代价了。
+
 #### Estimate the Cost of Individual C++ Statements
+
+内存访问的时间代价远超过其它指令执行的代价。理论上，一条指令执行的时间包括从内存中读取指令的时间，加上从内存中读取输入数据的时间，加上向内存中写入结果的时间，而指令解码及执行的时间基本上可以忽略不计。不过，在流水线的情况下，读取指令的时间大体上也可以忽略，所以，要评估一条C++语句的时间代价，基本上可以通过对这条语句读取和写入内存的次数进行计数得到。比方说对`a=b+c`，包括了对b和c的读取，以及对a的写入，也就是两次读取，一次写入。再比如对`r=*p+a[i]`，包括对`i`的一次读取，对`a[i]`的一次读取，对`p`的一次读取，对`*p`所指的一次读取，以及对`r`的一次写入，也就是总共5次对内存的访问。
 
 #### Estimate the Cost of Loops
 
+对于循环的分析，可以参考算法课或者数据结构课上关于时间复杂度的分析，那里更为全面一些。不过要注意的是一些隐式的循环，比方说事件驱动的事件循环，这是隐藏在框架后面的，只要有足够的事件，也总是可以找到热点事件的。
+
 ### Other Ways to Find Hot Spots
 
+这里所谓另外的方法指的是程序员的本能，但是这没有什么意义，要说明问题或者说服别人，还是需要数据，比方说profiler的结果，计时的结果，以及算法分析的结果，但是算法分析的过程及结果对普通人来说可能不好接受。
+
 ### Summary
+
+- Perfomance must be measured.
+- Make testable predictions,and write the predictions down.
+- Make a record of code changes.
+- If each experiment run is documented,it can quickly be repeated.
+- A program spends 90% of its run time in 10% of its code.
+- A measurement must be both true and precise to be accurate.
+- Resolution is not accuracy.
+- On Windows,the function `clock()` provides a reliable 1-millisecond clock tick.For Windows8 and later,the function `GetSystemTimePreciseAsFileTime()` provides a submicrosecond tick.
+- Accepting only large changes in performance frees the developer from worrying about methodology.
+- To estimate how expensive a C++ statement is,count the number of memory reads and writes performed by the statement.
+
+## Chapter 4 Optimize String Use:A Case Study
+
+### Why Strings Are a Problem
+- string是动态分配的
+
+- strings是值
+
+- string会有很多的复制操作
+
+### First Attempt at Optimizing Strings
+
+```c++
+std::string remove_ctrl(std::string s)
+{
+    std::string result;
+    for(int i=0;i<s.length();++i)
+    {
+        if(s[i]>=0x20)
+            result=result+s[i];
+    }
+    return result;
+}
+```
+
+这段代码在性能上有很大的问题。主要问题字符串的连接是很昂贵的。在这里，每次连接操作(`+`)都会调用内存管理来构建一个临时对象，然后将这个临时对象赋值给result，这也意味着一次复制操作。而且在进行连接操作前，会把result复制到临时对象里去，因此，如果s的长度为n，那么就会做$n^2$次复制。换句话说，这个算法实际上是O($n^2$)的。
+
+#### Use Mutating String Operations to Eliminate Temporaries
+
+```c++
+std::string remove_ctrl_mutating(std::string s)
+{
+    std::string result;
+    for(int i=0;i<s.length();++i)
+    {
+        if(s[i]>=0x20)
+            result+=s[i];
+    }
+    return result;
+}
+```
+
+这样的改进去除了对临时对象的所有操作：构造，复制和释放。并且也去除了赋值相关分配和复制操作。然而，由于result的长度是个缺省值，因此，还是有可能要时不时的增加其内置存储的长度。
+
+#### Reduce Reallocation by Reserving Storage
+
+```c++
+std::string remove_ctrl_reserve(std::string s)
+{
+    std::string result;
+    result.reserve(s.length());
+    for(int i=0;i<s.length();++i)
+    {
+        if(s[i]>=0x20)
+            result+=s[i];
+    }
+    return result;
+}
+```
+
+`reserve()`不但可以去除对string内置存储区的重新分配，并且提高了函数对cache的访问效率，这是出于局部性原理。
+
+然而，这里还有一个问题，就是s作为值传入，那么就会涉及到临时对象的创建和复制。我们也看到，s是不会被更改的，所以可以作为一个const的引用传入。
+
+#### Eliminate Copying of String Arguments
+
+```c++
+std::string remove_ctrl_ref_args(std::string const& s)
+{
+    std::string result;
+    result.reserve(s.length());
+    for(int i=0;i<s.length();++i)
+    {
+        if(s[i]>=0x20)
+            result+=s[i];
+    }
+    return result;
+}
+```
+
+然而，这样更改实际测试效果并不一定有效。这与引用的实现有关，引用通常是指针实现的，在循环中对s的每次使用，都需要去解引用，这样也是会影响执行效率的。
+
+#### Eliminate Pointer Dereference Using Iterators
+
+```c++
+std::string remove_ctrl_ref_args_it(std::string const& s)
+{
+    std::string result;
+    result.reserve(s.length());
+    for(auto it=s.begin(),end=s.end();it!=end;++it)
+    {
+        if(*it>=0x20)
+            result+=*it;
+    }
+    return result;
+}
+```
+
+通常来说，迭代器要比下标快，并且不需要每次都对s进行解引用。另外就是end循环开始就获取了，就不用每次迭代再取一次，当然这个工作编译器应该能够实现，毕竟这是一个很明显的循环不变量。
+
+最后，还有一个问题，就是对结果的复制。
+
+#### Eliminate Copying of Returned String Values
+
+```c++
+void remove_ctrl_ref_result_it(std::string& result,std::string const& s)
+{
+    result.clear();
+    result.reserve(s.length());
+    for(auto it=s.begin(),end=s.end();it!=end;++it)
+    {
+        if(*it>=0x20)
+            result+=*it;
+    }
+}
+```
+
+在很多时候，这个版本不需要任何的分配操作。这里的问题在于其接口可能会被误用，比方说
+
+```c++
+std::string foo("this is a string");
+remove_ctrl_ref_result_it(foo,foo);
+```
+
+其结果会是一个空串。
+
+然而，事情并没有结束。
+
+#### Use Character Arrays Instead of Strings
+
+```c++
+void remove_ctrl_cstring(char * destp,char const* srcp,size_t size)
+{
+    for(size_t i=0;i<size;++i)
+    {
+        if(srcp[i]>=0x20)
+            *destp++=srcp[i];
+    }
+    *destp=0;
+}
+```
+
+显然，这是效率最高的版本了。这里只是要考虑对于destp是动态分配一个空间然后释放，还是静态的声明一个数组。其实差别不大，对整体效率而言。
+
+#### Summary of First Optimization Attempt
+
+|Function| Debug(μs) |  Δ(%) | Release(μs) |  Δ(%)| Release vs. debug(%)|
+| :---------: | :---: | :--: | :-----: | :--: | :---------------: |
+| remove_ctrl() | 967  |      |     24.8    |      |3802          |
+|remove_ctrl_mutating()|104|834|1.72|1341|5923|
+|remove_ctrl_reserve()|102|142|1.47|17|6853|
+|remove_ctrl_ref_args_it()|215|9|1.04|21|20559|
+|remove_ctrl_ref_result_it()|215|0|1.02|2|21012|
+|remove_ctrl_cstrings()|1|9698|0.15|601|559|
+
+上面的结果看大体趋势就行，不需要纠结具体的值。
+
+以上的优化立足于一个简单的原则：移除内存分配和相关的复制操作。
+
+### Second Attempt at Optimizing Strings
+
+#### Use a Better Algorithm
+
+#### Use a Better Complier
+
+#### Use a Better String Library
+
+#### Use a Better Allocator
+
+### Eliminater String Conversion
+
+#### Conversion from C String to std::string
+
+#### Conversion Between Character Encodings
+
+### Summary
+
