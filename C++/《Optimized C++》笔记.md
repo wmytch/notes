@@ -555,17 +555,220 @@ void remove_ctrl_cstring(char * destp,char const* srcp,size_t size)
 
 #### Use a Better Algorithm
 
+在前面的算法里，每次只复制一个字符，这很有可能造成不断地重新分配内存。
+
+```c++
+std::string remove_ctrl_block(std::string s)
+{
+    std::string result;
+    for(size_t b=0,i=b,e=s.length();b<e;b=i+1)
+    {
+        for(i=b;i<e;++i)
+        {
+            if(s[i]<0x20)
+                break;
+        }
+        result=result+s.substr(b,i-b);
+    }
+}
+```
+
+这里有两个改进
+
+1. 不是复制一个字符，而是把符合条件的字符一起复制到结果中去。
+2. 源字符串的长度先保存起来了，不用每次迭代都去计算一次。当然，这个工作正常的编译器会处理的
+
+但是，还是有改进的余地
+
+1. 如前面所示，result的长度可以事先确定，
+2. 可以使用`+=`而不是`+`，或者使用append函数，这样可以不用创建临时对象。
+
+```c++
+std::string remove_ctrl_block_append(std::string s)
+{
+    std::string result;
+    result.reserve(s.length());
+    for(size_t b=0;i=b,e=s.length();b<e;b=i+1)
+    {
+        for(i=b;i<e;++i)
+        {
+            if(s[i]<0x20) 
+                break;
+        }
+        result.append(s,b,i-b);
+    }
+}
+```
+
+当然，这里的主要改进是每次复制一块数据，而不是一个字节的数据，前面提到过的改进还是可以结合使用的，比方说用迭代器而不是使用下标运算。
+
+另外，虽然这里有两层for循环，但时间复杂度仍然是O(n)。
+
+最后，还有一个方法，就是直接从源字符串中删除控制符
+
+```c++
+std::string remove_ctrl_erase(std::string s)
+{
+    for(size_t i=0;i<s.length();)
+    {
+        if(s[i]<0x20)
+            s.erase(i,1);
+        else
+            ++i;
+    }
+    return s;
+}
+```
+
+这种方法很好，但是这种方法的语义可能不是想要的，或者说与大多数string操作的语义不一致。
+
 #### Use a Better Complier
 
 #### Use a Better String Library
+
+c++标准要求迭代器是随机访问的，并且禁止写时复制(COW)。
 
 #### Use a Better Allocator
 
 ### Eliminater String Conversion
 
+字符串转换可能意味着字符拷贝和动态分配内存，这也就意味着有优化的余地。
+
 #### Conversion from C String to std::string
+
+一个常见的浪费计算机时钟的毫无必要的转换是从一个null结尾的字符串转换成std::string，比如
+
+```c++
+std::string MyClass::Name() const
+{
+    return "MyClass";
+}
+```
+
+这里需要把一个字符串常量转化成一个std::string，因此需要分配空间，复制字符。
+
+但事实上这里并不需要做这个转换，可以留到使用的地方再由编译器自动转换，比方说赋值给一个string或者作为一个函数参数
+
+```c++
+char const* MyClass::Name() const
+{
+    return "MyClass";
+}
+```
+
+由于”MyClass”是个字面量，并不会因为Name结束而不知所踪。
+
+在一个大系统当中，通常是分层的，可能会出现一个string转换成const char*，然后这个const char*又转换成string的情况，所以还不如直接使用一个字面量。
 
 #### Conversion Between Character Encodings
 
+建议使用UTF-8，兼容C风格的字符串。
+
 ### Summary
+
+- Strings are expensive to use because they are dynamically allocated,they behave as values in expressions,and their implementation requires a lot of copying.
+- Treating strings as objects instead of values reduces the frequency of allocation and copying.
+- Reserving space in a string reduces the overhead of allocation.
+- Passing a const reference to a string into a function is almost the same as passing the value,but can be more efficient.
+- Passing a result string out of a function as a reference reuses the actual argument’s storage,which is potentially mor efficient than allocating new storage.
+- An optimization that only sometimes removes allocation overhead is still an optimization.
+- Sometimes a different algorithm is easier to optimize or inherently more efficient.
+- The standard library class implementations are general-purpose and simple.They are not necessarily high-performance,or optimal for any particular use.
+
+## Chapter 5 Optimize Algorithms
+
+### Time Cost of Algorithms
+
+- O(1)，常量时间
+- O($log_2n$)
+- O(n)，线性时间
+- O($nlog_2n$)
+- O($n^2$)，O($n^3$)等等
+- O($2^n$)
+
+详细的就不讨论了，找本算法书说的更加全面。
+
+#### Amotized Time Cost
+
+比方说，向一个堆中插入数据需要O($log_2n$)的时间，因此用一次插入一个元素的方法构建一个堆需要O($nlog_2n$)的时间。然而，最高效的堆构建算法是O(n)，也就是说通过这个方法均摊到每一个元素插入只需要O(1)的时间，高效算法并不是每次插入一个元素，而是通过分治法处理一系列的子堆得到。这里的意思是，通过使用高效的构建算法，向堆中插入元素的时间变成O(1)而不是O($log_2n$)，当然这只是对构建堆的时候的分析，并不是在普通情况下向堆插入元素的时间。
+
+在比如说，向一个std::string插入字符的均摊时间是个常数，但是其中包含了对内存管理的调用，如果string比较短，那么有可能每次插入都会调用内存管理，只有当string比较长的时候，这个均摊时间才会变得比较低，当然这是string重新分配缓冲算法的原因。
+
+#### Other Costs
+
+除了时间代价，还有空间代价，比方说递归算法，必然需要一个栈。通常来说，时间和空间的矛盾在算法效率评估上是一直存在的。
+
+### Toolkit to Optimize Searching and Sorting
+
+- 用平均时间更好的算法代替平均时间糟糕的算法
+- 考虑数据结构，选用更适合特定数据结构的算法
+- 调整算法以获取更好的常量因子。
+
+### Efficient Search Algorithms
+
+#### Time Cost of Searching Algorithms
+
+- 线性查找，O(n)。
+
+    这个没什么好说的，记住一点就是对于基本有序的线性表，查找效率并不是很低。另外，如果把每次查找到的结果插入到表头，也会提高查找效率，这一点通常算法教科书是没有提到的，虽然局部性原理很多课程都会提到。
+
+- 二分查找，O($log_2n$)。
+
+    二分查找需要输入数据有序。实际上，对输入数据先进行排序，对将来的操作都是有益的。
+
+- 插值查找，最好情况O($log log n$)。
+
+    跟二分查找一样，需要对输入数据分区，但是分区的标准立足于对输入数据的更多的了解，从而达到更好的分区效果。比方说，要在一个有序的数值线性表中查找一个数x，二分查找的话通常就是$mid=\frac{high+low}{2}$，而插值查找则可以是$mid=low+\frac{(x-A[low])*(high-low)}{A[high]-A[low]}$。如果表很大或者检查表中每一条数据的代价比较高，比方说磁盘上的数据，那么使用插值插值提升是很大的。
+
+- 哈希表是有可能达到O(1)的算法，哈希表最坏情况是O(n)，但是hash表会浪费一些空间。
+
+#### All Searches Are Equal When n Is Small
+
+这里很小指的是只有几个数据的表，表越大，差异自然也就越大
+
+| 表大小 | 线性 | 二分 | 哈希 |
+| :----: | :--: | :--: | :--: |
+|   1    |  1   |  1   |  1   |
+|   2    |  1   |  2   |  1   |
+|   4    |  2   |  3   |  1   |
+|        |  4   |  4   |  1   |
+|   16   |  8   |  5   |  1   |
+|   26   |  13  |  6   |  1   |
+|   32   |      |  6   |  1   |
+
+### Efficient Sort Algorithms
+
+- 说排序算法时间最好的是O($nlog_2n$)是不对的。首先这是通过比较输入数据的值来排序的算法的最好的时间复杂度，对于像基数排序这样，不比较关键字的值进行排序的算法来说，则是不对的。其次，如果排序关键字具备某种属性，比方说一个从1到n的整数集合，flashsort可以达到O(n)。
+- 快速排序最坏情况是O($n^2$)，并且最坏情况是不可避免的。
+- 有些排序，包括插入排序，在输入数据基本有序的时候可以得到线性的时间，而快速排序在这种情况下如果选择轴的方法不当，可能会变成O($n^2$)的。
+
+#### Time Cost of Sorting Algorithms
+
+| 排序算法  | 最好情况  | 平均情况  | 最坏情况  | 所需空间 | 备注                                 |
+| :-------: | :-------: | :-------: | :-------: | :------: | :----------------------------------- |
+| 插入排序  |     n     |   $n^2$   |   $n^2$   |    1     | 最好情况是输入数据有序或者基本有序   |
+| 快速排序  | $nlog_2n$ | $nlog_2n$ |   $n^2$   | $log_2n$ | 最坏情况是输入数据有序并且轴选择不当 |
+| 归并排序  | $nlog_2n$ | $nlog_2n$ | $nlog_2n$ |    1     |                                      |
+|  树排序   | $nlog_2n$ | $nlog_2n$ | $nlog_2n$ |    n     |                                      |
+|  堆排序   | $nlog_2n$ | $nlog_2n$ | $nlog_2n$ |    1     |                                      |
+|  timsort  |     n     | $nlog_2n$ | $nlog_2n$ |    n     | 最好情况是输入数据有序               |
+| introsort | $nlog_2n$ | $nlog_2n$ | $nlog_2n$ |    1     |                                      |
+
+#### Replaces Sorts Having Poor Worst-Case Performance
+
+如果对输入数据一无所知，那么归并排序，树排序和堆排序通常可以提供一个比较正常时间。如果一定要使用快速排序，那么就必须好好考虑轴的选取，但是总有运气不好的时候。
+
+#### Exploit Known Properties of the Input Data
+
+如果已知输入数据是有序或者基本有序的，那么插入排序可以提供O(n)的性能。
+
+Timsort是混合了归并排序和插入排序的一种算法，在输入数据有序或者基本有序时也可以得到O(n)的性能，其最坏性能也不过O($nlog_2n$)，目前这是python的标准排序算法。
+
+Introsort混合了快速排序和堆排序，首先会做快速排序，当发现递归层次过深时，就切换成堆排序。这是C++11中std::sort()优先使用的算法。
+
+flashsort有O(n)的时间，如果输入数据服从某种分布的话。类似于基数排序，不过数据会根据概率放到不同的桶中。
+
+### Optimization Patterns
+
+
 
