@@ -1007,5 +1007,441 @@ C++本身并不决定一个变量是值变量还是实体变量，这是由程�
 
 #### Create Class Instance Statically
 
+尽可能的使用自动的类实例，而不是使用new来动态创建一个类实例。
+
+对于类成员，主要是指成员类，可以使用两步初始化，也就是说在类实例化时，由于其成员类所需的资源可能还没有得到满足，可以先实例化一个空白类，到了将来资源齐备了，再通过一个初始化函数将其完全实例化。两步初始化并没有额外的代价，检查其是否完备与检查一个指针是否nullptr的代价是一样的。另外，初始化函数可以返回错误，而构造函数是没有的。
+
+两步初始化特别适用于在初始化时会比较耗费时间的类，比方说读文件，获取http响应。
+
+#### Use Static Data Structures
+
+`std::string`、`std::vector`、`std::map`、`std::list`这些都是日常使用的容器，但是要意识到`std::string`和`std::vector`可能会自动重新分配空间，而`std::map`和`std::list`在每次插入数据时都会分配新的节点，因此，它们的效率可能不是那么高。
+
+- 使用`std::array`取代`std::vector`。`std::array`是长度固定的，其接口也是兼容标准库容器的，所以如果能够大致确定数据量，使用`std::arry`或者直接使用数组都是可以的。但是要明白`std::vector`的优点就在其可变性，虽然这种灵活性需要代价。
+
+- 在栈上创建大缓冲。就是把数据复制到本地创建的一个数组当中，然后对这个数组进行处理，最后可能需要把结果再复制一遍。总的来说，这种复制要比使用`std::string`快，一则，对数据内容的更改，就`std::string`而言，也是隐含着复制操作的，二则，复制操作的代价要小于动态内存分配。
+
+- 静态创建链接的数据结构。比方说
+
+    ```c++
+    struct treenode
+    {
+        char const* name;
+        treenode* left;
+        treenode* right;
+    } tree[]=
+    	{
+        	{"D",&tree[1],&tree[2]},  //tree[0]
+        	{"B",&tree[3],&tree[4]},  //tree[1]
+        	{"F",&tree[5],nullptr},   //tree[2]
+        	{"A",nullptr,nullptr},    //tree[3]
+        	{"C",nullptr,nullptr},	  //tree[4]
+        	{"E",nullptr,nullptr}	  //tree[5]
+    	};
+    ```
+
+    但是这种方式比较容易出错，而且没有扩展性。
+
+    另外一种方式则是
+
+    ```c++
+    struct cyclenode
+    {
+        char const* name;
+        cyclenode* next;
+    };
+    extern cyclenode first; //前向引用
+    cyclenode fourth={"4",&first};
+    cyclenode third={"3",&fourth};
+    cyclenode second={"2",&third};
+    cyclenode first={"1",&second};
+    ```
+
+    显然，这种方式更为实用一些，对于一个动态的数据结构而言。
+
+    总之，就是在第一感需要动态变量的地方，可以再考虑下是否能够使用自动变量，比方说就上面这个例子，new一个节点，再修改节点指针，这一系列操作通过使用自动变量也是可以实现的。不过显见的问题调试的时候可能会看的眼花，没有动态变量那么直观。
+
+- 在数组中创建二叉树。对于变化比较大的二叉树显然并不怎么合适，不过这种方式往往是堆的实现方式。
+
+- 使用循环缓冲而不是deque。总体而言，循环缓冲的性能类似于`std::vector`。
+
+#### Use `std::make_shared` instead of new
+实际上一个共享指针，比方说`std::shared_ptr`包含两个指针，一个指向数据对象，一个指向引用计数对象。因此像这样的语句
+
+    ```c++
+    std::shared_ptr<MyClass> p(new MyClass("hello",123));
+    ```
+    
+    调用了两次内存管理，一次创建MyClass的实例，一次创建引用计数对象。
+    
+    不过这个问题可以使用`std::make_shared`来解决
+    
+    ```c++
+    auto p=std::make_shared<MyClass>("hello",123);
+    ```
+
+#### Dont't Shared Ownership Unnecessarily
+`std::shared_ptr`是有代价的，对引用计数的操作不是简单的增减，而是对一个完全内存屏障的原子操作。
+
+    如果有一个shared_ptr，对其的一个使用的生存期完全覆盖了另一个使用的生存期，那么对于第二个使用的耗费就是没有必要的。比方说
+    
+    ```c++
+    void fiddle(std::shared_ptr<Foo> f);
+    ...
+    shared_ptr<Foo> myFoo=make_shared<Foo>();
+    ...
+    fiddle(myFoo);
+    ```
+    
+    myFoo拥有Foo的一个动态实例，调用`fiddle()`时，又出现了对这个Foo的动态实例的第二个链接，从而增加了这个shared_ptr也就是myFoo的引用计数，这里要理解下c/c++函数参数的传递方式。当`fiddle()`返回时，第二个对myFoo引用，也就是fiddle的参数释放。调用者仍然拥有这个指针。显然这里对引用计数的原子操作是没有什么意义的，单次这样的操作虽然微不足道，但是就整个程序而言，如果这样的操作多了，代价也是可观的。
+    
+    这里直接使用普通指针就可以了
+    
+    ```c++
+    void fiddle(Foo* f);
+    ...
+    shared_ptr<Foo> myFoo=make_shared<Foo>();
+    ...
+    fiddle(myFoo.get());
+    ```
+    
+    如果不愿意使用指针，也可以使用引用。用引用作为函数参数通常表示两个涵义，调用者必须确保引用在调用函数执行期间是有效的，同时那个指针必须不空
+    
+    ```c++
+    void fiddle(Foo& f);
+    ...
+    auto myFoo=make_shared<Foo>();
+    ...
+    if(myFoo)
+        fiddle(*myFoo.get());    
+    ```
+    
+    这里`*`是把`get()`返回的指针转换成一个Foo的引用。通常引用代表着“非所有、非空的指针”。
+
+#### Use a "Master Pointer" to Own Dynamic Variables
+shared_ptr很容易使用。但正如前面所说的，共享指针代价比较高，并且有时候共享是没有必要的。很多时候，一个数据结构在其整个生存期都拥有一个动态变量，这个动态变量通过引用或者指针来使用。可以用`std::unique_ptr`来实现一个所谓的主指针，然后通过指针或者引用来使用这个主指针，只要保持一致性，那么就可以认为这些裸指针或者引用并没有拥有这个动态变量，它们只是在使用。使用主指针可以有效的避免内存泄露。如果有明确的所有者，使用主指针会是很大的优化，否则，使用shared_ptr也不是不可以。
+
+### Reduce Reallocation of Dynamic Variables
+
+有一些技巧可以在使用标准容器时减少分配内存的次数，这些技巧对用户自定义数据结构往往也是适用的。
+
+#### Preallocate Dynamic Variables to Prevent Reallocation
+
+对于std::string和std::vector，随着数据不断增多，是肯定会重新分配缓冲的。
+
+string和vector都有一个成员函数`reserve(size_t n)`，可以用来指定它们缓冲的最少应该满足的大小，正如前面优化例子里看到过的。使用`reserver()`之后，如果预先分配的空间没有完全利用，那么可以调用它们的成员函数`shrink_to_fit()`返回这部分空余空间。
+
+`std::unordered_map`也有`reserver()`成员函数，但是`std::deque`没有。
+
+#### Create Dynamic Variables Outside of Loops
+
+对于string和vector这样的会动态调整底层存储大小的数据结构来说，将其变量的创建放到循环外，在循环中只是把存储内容的大小设置为0，比方说string的clear函数，这个函数并不重新调整空间。所以对于容器来来说，区分实际分配的空间大小和所存储数据占的空间大小是有意义的。
+
+另外，把变量的创建放到循环外，还包括作为类成员或者全局变量的方式，实际上从性能的角度说，全局变量本身是有优势的。
+
+### Eliminate Unneeded Copying
+
+在C++中，假定有两个变量a和b，都是一个类Foo的实例，`a=b;`会调用Foo的`operator=()`，`Foo a=b;`会调用Foo的复制构造函数，这两个函数操作基本上是一样的，都有可能涉及大量的内存分配以及内存复制工作。
+
+在浏览热点代码时，要特别注意赋值和声明，因为这些地方都是可能涉及大量复制的。
+
+复制可能会出现下面这些地方：
+
+- 初始化(调用构造函数)
+- 赋值(调用赋值运算符)
+- 函数参数，每一个实际参数都是通过移动或者复制来构造的
+- 函数返回，同样是移动或者复制构造，可能会构造两次，一次是在函数返回语句中形成返回值，一次是把这个临时的对象赋给接收返回的对象
+- 向标准容器插入数据项，数据项是移动或者复制构造的，
+- 或者如果插入数据造成容器重新分配大小，那么容器中的原有数据也会移动或者复制到新的空间中
+
+#### Disable Unwanted Copying in the Class Definition
+
+许多作为实体的对象通常拥有大量的状态，例如一个有数千个字符串的vector，或者一个有几千个符号的表，这些对象的复制，比方说作为值参数传递到一个函数中是没有必要的。
+
+如果一个类实例的复制是代价昂贵或者是不需要的，那么可以显式的禁用掉其复制构造函数和赋值运算符，在C++11前，可以把这两个成员函数声明为private的，并且不需要定义，从C++11开始，可以使用delete关键字显式的禁用这两类成员函数，并且这个声明应该放在pulic域中。
+
+不过，如果复制构造或者赋值传递的是指针或者引用，允许存在也是没有问题的。但是必须要注意浅复制的问题。
+
+#### Eliminate Copying on Function Call
+
+调用函数时，每一个实际参数表达式都会被求值，每一个形式参数都会以对应的实际参数表达式的值为初始值进行构造。
+
+构造的意思是调用形式参数的构造函数，对于基本类型，比方说`int`，`double`，或者`char*`，构造是概念性的，并不是一个真实的函数调用，编译器只是把它们的值复制到形式参数的存储空间中。而如果形式参数是个类实例，那么这个类的某一个构造函数就会被调用。比方说
+
+```c++
+int Sum(std::list<int> v)
+{
+    int sum=0;
+    for(auto it:v)
+        sum+=*it;
+    return sum;
+}
+```
+
+对于这样的调用`int total=Sum(MyList);`，实际参数MyList是一个list实例，形式参数v也是一个list，于是调用std::list的复制构造函数，把MyList的每一个元素都复制到v中，每一次复制都会调用一次内存管理，显然如果MyList很大，代价将是难以接受的。并且当函数返回，v的生存期结束时，其元素的空间也要一个一个的返回空闲内存列表。换句话说，要时刻记得动态内存分配不仅仅只是分配，还包括释放。
+
+为了避免这样的代价，这里v可以声明为`std::list<int> const& v`，这样，v就由一个引用初始化，而不是一个庞大的数据结构本身。但是对于使用指针来实现的引用，解引用也是有代价的，前面优化的例子也有说明，不过这种代价是否可以规避或者可以减少或者可以容忍，取决于程序逻辑。
+
+使用引用或者指针作为函数参数时要注意两点：
+- 除了代价较小之外，const&参数效果上可以等同于传值，前者不允许修改所引用的参数，而后者对参数的修改并不影响函数外的值。
+- 非const的引用有可能产生别名，比方说一个函数签名`void func(Foo& a,Foo& b);`，如果这样调用`func(x,x)`，显然，如果`func()`改变了a，那么b也会被改动。
+
+#### Eliminate Copying on Function Return
+
+当函数返回值时，这个值会被复制构造成一个返回类型的临时对象。比方说
+
+```c++
+std::vector<int> scalar_product(std::vector<int> const& v,int c)
+{
+    std::vector<int> result;
+    result.reserve(v.size());
+    for(auto val:v)
+        result.puch_back(val*c);
+    return result;
+}
+```
+
+于是，对于`auto res=scalar_product(argarray,10);`这样的调用，在函数内部return语句中，用result初始化了一个临时对象，而在函数外部，又用这个临时对象复制构造了res，如果把其中的auto去掉，表示res是已声明过的变量，那么这里又会调用一次赋值操作符。
+
+虽然返回引用也是一个选择，但是返回一个局部对象的引用是无效的。另外，在函数中计算然后把结果返回是一个常见用例，因此大多数函数返回值而不是引用。
+
+上面提到的的双重复制构造是早期C++程序的性能杀手，为此C++委员会和许多编译器引入了一个优化，叫做copy elision或者return value optimization(RVO)，然而，RVO适用的条件比较苛刻，函数返回的必须是一个本地构造的对象，编译器必须能够知道所有控制路径返回的都是同一个对象，这个返回对象的类型必须与函数声明的返回类型一致。不过在C++17，重新对左右值做了界定之后，大体上已经解决了这个问题。
+
+所以，与其期待编译器做RVO，不如自己解决。正如前面优化例子曾使用过的，增加一个引用参数作为函数的输出参数承载返回，而不是依赖于函数的返回语句
+
+```c++
+void scalar_product(std::vector<int> const& v,int c,vector<int>& result)
+{
+    result.clear();
+    result.reserve(v.size());
+    for(auto val:v)
+        result.push_back(val*c);
+}
+```
+
+使用输出参数有几个优点
+
+- 函数调用的时候对象已经构造好了，虽然可能在函数内会做些清理或者重新初始化的工作，但是这些与构造对象相比代价是比较小的
+- 在函数内更新的对象不必再复制到return语句中的匿名临时对象上
+- 函数返回值的类型可以是void，或者别的什么可以用来表示状态和错误信息的类型
+- 因为被更新的对象已经由调用者绑定在一个名字上，函数返回后也就不再需要赋值或者复制了。
+
+但是，如果输出参数是像string，vector，哈希表这样的数据结构，如果一个函数被多次调用，其动态分配的底层数组会被重用，因此需要调用者另外保存函数的结果，也就是说可能还是需要把输出参数的值取出来放到别的地方去。不过，这里的代价还是要小于函数返回一个类实例。
+
+除此之外，这种机制没有别的额外代价了。
+
+在C++中只有一种情况必须用值返回一个对象，那就是运算符函数。比方说矩阵运算`A=B*C`，这种句法无法通过引用返回，不过由于矩阵运算的重要性，其运算符函数经过精心设计，通常都可以使用RVO或者移动语义来达到最高的效率。
+
+#### Copy Free Libraries
+
+但使用缓冲或者说数组，结构，或者其它数据结构作为函数的参数时，可以传递它们的引用或者指针，这样就可以用很小的代价穿透多层次的库函数调用，这种库也被称作免复制库。比方说C++标准库里的`istream::read()`的调用序列
+
+```c++
+istream& read(char*s,streamsize);
+==>size_t fread(void* ptr,size_t size,size_t nmemb,FILE* stream);
+	===>ssize_t read(int fd,void* buf,size_t count);
+或者
+    ===>BOOL ReadFile(HANDLE hFile,void* buf,DWORD n,DWORD* bytesread,OVERLAPPED* pOverlapped);
+```
+
+缓冲区的指针会一直传递到系统调用，而各个函数会返回函数调用的状态，这点前面提到过。
+
+这种方式显然比返回一个值的效率要高，因为不需要在各个函数中分配空间，返回的时候再复制内容。既然从操作系统到语言本身都采用了这种机制，那么认为返回一个值从而减少一个函数参数会更自然的想法自然是站不住脚的。
+
+#### Implement the “Copy on Write” Idiom
+
+C++11禁止了在std::string中使用COW，自然是有其道理的。COW也并不总是能带来优化效果，所以使用的时候必须小心，即使咋看起来COW是那么美好。
+
+COW开始于一个浅复制，当数据发生变化时再进行深复制。重要的是，在实现COW的类中使用`std::make_shared()`来构造动态变量，否则，会影响内存管理对引用计数的使用。
+
+如果总是要制作许多数据副本，或者时不时的就要改变数据，那么使用COW并没有什么特别的好处。或者说，COW更适用于不怎么改变数据的场合。
+
+#### Slice Data Structures
+
+分片指的是把一个数据结构划分成块，这些块可以用变量直接指向。现代语言中已经广泛使用了，在C++中暂时还是需要手工实现。
+
+### Implement Move Semantics
+
+移动语义解决了C++中之前一直存在的一些回绕问题，比方说
+
+- 一个对象赋给了一个变量，其中包含了代价不菲的复制操作，然后，这个对象就被销毁了。显然这里的复制是没有必要的
+- 当把一个实体，比方说auto_ptr或者资源句柄，赋给一个变量时，这个赋值里的复制操作是未定义的，因为这些实体对象的标识是唯一的。
+
+以vector为例，上面的第一条限制使得重新分配空间时的耗费超出了必须，第二条限制则使得像auto_ptr这样的实体不能放到vector中。
+
+#### Nonstandard Copy Semantics:A Painful Hack
+
+当一个变量作为实体时，其复制操作是未定义的。最好是把这个变量的复制构造和赋值操作禁用掉。而vector需要其元素可以复制，所以不能对这样的对象使用vector。为此，有这么一种做法
+
+```c++
+hacky_ptr& hacky_ptr::operator=(hacky_ptr& rhs)
+{
+    if(*this!=rhs)
+    {
+        this->ptr=rhs.ptr;
+        rhs.ptr=nullptr;
+    }
+    return *this;
+}
+```
+
+虽然函数的签名已经暗示了rhs会被更改，这点与通常的赋值不同，但是赋值本身并没有任何的提示。因此如果没有仔细看过函数定义，写出下面的代码就免不了要吃一惊了。
+
+```c++
+hacky_ptr p,q;
+p=new Foo;
+q=p;
+...
+p->foo_func(); //p已经是nullptr了
+```
+
+#### `std::swap()`:The Poor Man’s Move Semantics
+
+对于实体来说，`swap()`是良好定义的的函数模板，不同的容器类会定义相应的swap函数，用户自定义类也可以自定义`swap()`函数模板的特化。
+
+交换的问题在于，尽管其对有动态变量需要深复制的类效率比较高，但是对于其它的类就没有那么高了，因为不能只是交换指针了。
+
+#### Shared Ownership of Entities
+
+实体不能复制，但是指向实体的共享指针可以。因此，尽管在移动语义出现前不能创建一个`std::vector<std::mutex>`,但是可以创建一个`std::vector<std::shared<std::mutex>>`。复制一个shared_ptr是良好定义的：制作一个唯一对象的一个额外引用。但是，这会带来额外的复杂性和运行时代价。
+
+#### The Moving Parts of Move Semantics
+
+为了实现移动语义，编译器必须能够辨认出临时存在的变量，这样的实例是没有名字的，比如函数返回的对象，或者new表达式返回的结果。没有其它引用指向这个对象，这个对象可以用来初始化或者赋值给一个变量，可以作为表达式或者函数调用的参数，但在下一个序列点就会被摧毁。这种未命名的值被称为右值。需要提醒下，这里的传统的说法，按现在的概念，右值指的是表达式而不是值，并且这里说的的右值现在叫prvalue。下面是一个简单的例子
+
+```c++
+class Foo
+{
+    	std::unique_ptr<int> value;
+	public:
+    	Foo(Foo&& rhs)
+        {
+            value=rhs.release();
+        }
+    	Foo(Foo const& rhs):value(nullptr)
+        {
+            if(rhs.value)
+                value=std::make_unique<int*>(*rhs.value);
+        }
+};
+```
+
+当一个类没有定义复制构造函数，或者赋值运算符，或者析构函数，并且没有禁用移动操作时，编译器会自动生成移动构造函数和移动赋值操作符。在这些自动生成的移动操作里，对每个定义了移动操作的成员会进行移动操作，否则就复制。
+
+C++11之前，即使定义了析构函数，如果没有自定义复制构造函数和赋值操作符，编译器就会自动生成，不过C++11开始就不再强制了，所以最好的是如果不需要就显式的delete。
+
+自动生成的规则非常复杂，所以对于这些特殊的函数：缺省构造函数、复制构造函数、复制赋值操作符、移动构造函数、移动赋值运算符、以及析构函数，要么全部显式定义(包括显式禁用其中的某或者某几个)，要么全部缺省定义，要么全部禁用，总之要明确的表示出程序员的意图，而不是让编译器去猜测。
+
+#### Update Code to Use Move Semantics
+
+这是一个简单的确认列表，可以用来帮助这个过程
+
+- 确定一个可以受益于移动语义的问题。比如，一个把大量的时间用在复制构造和内存管理上的类，可能会受益于移动操作
+- 使用支持移动语义的编译器。
+- 检查第三方库，看看其是否有支持移动语义的新版本。
+- 对所要处理的类定义移动构造和移动赋值。
+
+#### Subtleties of Move Semantics
+
+移动语义也有一些微妙的地方，使用的时候是要注意的。
+
+##### Moving instances int std::vector
+
+要把对象移动到std::vector中仅仅定义移动构造函数和移动赋值操作符是不够的，必须把它们声明为noexcept。因为std::vector提供了一种强异常安全保证：如果一个vector操作的进行过程中发生了异常，vector的状态会保留在该操作进行之前。复制构造函数不会影响源对象，而移动构造函数会摧毁源对象，在移动操作过程中的异常都会违反这项保证，这里的违反就是字面意义上的违反，没有其它任何保证。
+
+如果这些移动操作没有声明为noexcept的，那么std::vector只会使用复制操作，这里不会有任何提示，除了慢一点之外。
+
+noexcept是一个承诺，必须能保证不抛出异常，如果其中确实抛出了异常，通常就是程序中止。这是效率的代价。
+
+##### Rvalue reference arguments are lvalues
+
+当一个函数用一个右值引用作为实际参数，那么会把这个右值引用用来构造对应的形式参数，而形式参数是有名字的，于是一个右值引用变成了一个左值。这是概念上要清楚的。
+
+不过，程序员可以通过`std::move()`显式的把一个左值转换成一个右值引用
+
+```c++
+std::string MoveExample(std::string&& s)
+{
+    std::string tmp(std::move(s));
+    return tmp;
+}
+
+std::string s1="hello";
+std::string s2="everone";
+std::string s3=MoveExample(s1+s2);
+```
+
+s1+s2会生成一个临时对象，或者说一个右值引用，然后用这个右值引用初始化了MoveExample的形式参数s，变成为一个左值引用。最后返回的tmp会用来构造一个作为返回值的临时对象，最终会被删除，而这个临时对象用来复制构造s3。不过，编译器这里可能会使用RVO，于是形式参数s会被直接移动到s3的存储空间中。RVO通常比移动更有效率，但是如前面所述，RVO并不总是能够实现的
+
+下面是一个使用移动语义的`std::swap()`函数
+
+```c++
+template<typename T>
+void std::swap(T& a,T& b)
+{
+    T tmp(std::move(a));
+    a=std::move(b);
+    b=std::move(tmp);
+}
+```
+
+这里T必须实现移动语义，否则会回归到复制。
+
+##### Dont’t return an rvalue reference
+
+返回右值引用会与RVO冲突。把一个右值引用作为返回值会产生两次移动，而返回一个值，在RVO的情况下只有一次移动。这依赖于RVO，而RVO的条件比较苛刻，所以这个还是看情况而定。如果确定RVO可行，那么不论是return语句的参数，还是函数声明的返回类型，都不应该是右值引用。
+
+##### Moving bases and members
+
+要对一个类实现移动语义，必须对其所有的基类和成员实现移动语义。
+
+```c++
+class Base{...};
+clase Derived:Base
+{
+    std::unique_ptr<Foo> member;
+    Bar* barmember;
+};
+Derived::Derived(Derived&& rhs)
+    :Base(std::move(rhs)),member(std::move(rhs.member)),barmember(nullptr)
+{
+    std::swap(this->bamember,rhs.member);
+}
+void Derived::operator=(Derived&& rhs)
+{
+    Base::operator=(std::move(rhs));
+    delete(this->barmember);
+    this->barmember=rhs.barmember;
+    rhs.barmember=nullptr;
+}
+```
+
+这里假定Base有一个移动构造函数。要注意的是Base移动构造函数的右值引用参数是通过`std::move(rhs)`初始化的，但没有把rhs移动到一个临时的地方，只是生成一个指向rhs的引用，并没有发生所有权的转移，一个左值引用的所有权不可能转移到一个临时对象上去，因此，后面对`rhs.member`的引用还是有效的，但是要注意这时候rhs的状态属于有效但是未确定，对其的操作是不能有前置条件的。移动赋值操作符里边对Base的`operator=`的调用同理。而在移动赋值操作符里边没有使用swap的原因在于，`this`指针可能已经指向了一个分配了空间的对象，交换的时候，`*this`会被交换给rhs，而swap并不会摧毁rhs，除非rhs自己析构，从语义上来说，rhs不会再被使用，但是又没有被销毁，于是浪费了空间。
+
+### Flatten Data Structures
+
+如果一个数据结构的成员可以一起存放在一片连续的空间，那么就可称之为平面的。平面数据结构相比链接型数据结构有很多的优势：
+
+- 内存管理代价更小，因为需要创建的动态对象更少，即使是同样O算法性能，`std::vector`和`std::array`的实际效率会更高。
+- 所占内存空间更小。有利于缓存的效率。
+- 配合移动语义，可以减少分配智能指针和分派指针指向的运行时代价。
+
+### Summary
+
+- Naive use of dynamically allocated variable is the greatest performance killer in C++ programs.When performance matters,**new** is not you friend.
+- A developer can be an effective optimizer knowing nothing other than how to reduce calls into the memory manager.
+- A program can globally change how memory is allocated by providing a difination of `::operator new()` and `::operator delete()`.
+- A program can globally change hwo memory is managed by replacing `malloc()` and `free()`.
+- Smart pointers automate ownership of dynamic variable.
+- Shared ownership of dynamic variables is more expensive.
+- Create class instances statically.
+- Create class members statically and use two-part initialization if needed
+- Use a master pointer to own dynamic variables,and unowned pointers instead of sharing ownership.
+- Create copy-free functions that pass data out in out parameters.
+- Implement move semantics.
+- Prefer flat data structures.
+
+
+
 
 
