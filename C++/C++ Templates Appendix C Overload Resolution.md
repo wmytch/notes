@@ -157,4 +157,220 @@ int main()
 
 ### C.2.2 Refining the Perfect Match
 
-对于一个类型X的实际参数，有四种形式参数可以构成完美匹配：X，X&，X  const&，X&&(X const&&当然也是，但是很罕见)。
+对于一个类型X的实际参数，可以完美匹配四种形式参数：X，X&，X  const&，X&&(X const&&当然也是，但是很罕见)。不过比较常见的是重载两种引用的函数，在C++11之前，就是指下面的情况
+
+```c++
+void report(int&); //#1
+void report(int const&); //#2
+
+for(int k=0;k<10;++k)
+{
+    report(k);  //#1
+}
+
+report(42); //#2
+```
+
+在这里，没有const的版本倾向于左值，而只有带const的版本才能匹配右值。
+
+C++11引入右值引用之后，下面例子说明了另外一个常见的区分两个完美匹配的情形
+
+```c++
+struct Value
+{
+    ...
+};
+
+void pass(Value const&);	//#1
+void pass(Value&&);		//#2
+
+void g(X&& x)
+{
+    pass(x);  //#1,x是个左值
+    pass(X()); //#2,X()是个右值，prvalue
+    pass(std::move(x)); //#2,std::move(x)是个右值，xvalue
+}
+```
+
+这一次带右值引用的版本被认为更加匹配右值。
+
+注意对于成员函数调用的隐含参数`*this`，上面规则也是适用的
+
+```c++
+class Wonder
+{
+    public:
+    	void tick();		//#1
+    	void tick() const;  //#2
+    	void tack() const; 	//#3
+};
+
+void run(Wonder& device)
+{
+    device.tick();  //#1
+    device.tack();  //#3,不存在非const的tack版本
+}
+```
+
+最后,下面这个例子说明了两个完美匹配也会引发不明确，如果只是通过有没有const来重载的话。
+
+```c++
+void report(int);		  //#1
+void report(int&); 		  //#2
+void report(int const&);  //#3
+
+for(int k=0;k<10;++k)
+{
+    report(k);  //不明确，#1和#2同等匹配
+}
+
+report(42); //不明确，#1和#3同等匹配
+```
+
+## C.3 Overloading Details
+
+这里是关于重载解析的一些经常碰到的规则的讨论。
+
+### C.3.1 Prefer Nontemplates or More Specialized Templates
+
+在其它条件相同的情况下，优先选择非模板函数而不是模板实例，不论这个实例是通用模板还是显式特化产生的。
+
+```c++
+template<typename T> int f(T);  //#1
+void f(int); //#2
+
+int main()
+{
+    return f(7); //错误，选择了#2，但是#2没有返回值。
+}
+```
+
+这个例子也说明了重载解析不会考虑返回值。
+
+但是，如果重载解析的其他方面有些许不同，比方说有不同的const和引用修饰符，就会首先使用通用的重载解析。这种情况可能会出乎意料，比方说在16.2.4讨论过的，复制或者移动构造函数的模板版本和非模板版本接受同样的参数。
+
+如果是在两个模板中选择，则优先选择更特别的那个模板。可以参见16.2.2。这条有一个特别的情况，就是如果两个模板的唯一区别就是其中之一有一个尾部参数包，那么没有参数包的就会被认为更特别。可以参见4.1.2。
+
+### C.3.2 Conversion Sequences
+
+通常，一个隐含转换可能是一系列的基本转换，比如
+
+```c++
+class Base
+{
+    public:
+    	operator short() const;
+};
+
+class Derived:public Base
+{};
+
+void count(int);
+
+void process(Derived const& object)
+{
+    count(object);  
+}
+```
+
+`count(object)`有效是因为object可以隐式的转换成int，不过这需要好几步：
+
+1. object从Derived const转换成Base const，这是一个glvalue转换，保留了对象的成分或者说身份。
+2. 用户定义的从Base const到short的转换。
+3. 从short到int的提升。
+
+重载解析有一条重要的原则，如果一个转换序列是另一个转换序列的子序列，那么更短的这条转换序列优先。比如，如果我们有另一个函数`void count(short)`，那么对于`count(object)`的调用就会优先选择这一个，因为不需要上面第三步的从short到int的提升。
+
+### C.3.3 Pointer Conversions
+
+指针和成员指针会有各种特别的标准转换，包括
+
+- 转换成bool类型
+- 从任意的指针类型转换成`void*`
+- 从派生类指针到基类指针的转换
+- 从基类的成员指针到派生类成员指针的转换
+
+尽管这些转换都会导致“只需要标准转换的匹配”，但它们的层级不同，上面的列表就是按从低到高的顺序排列的。
+
+首先，不论是普通指针还是成员指针，向bool类型的转换被认为是最低层级的。比如
+
+```c++
+void check(void*);  //#1
+void check(bool);   //#2
+
+void rearrange(Matrix* m)
+{
+    check(m);  //#1
+}
+```
+
+这里需要说明一下为什么会有指针向bool类型的转换，要记得在C/C++中，非空的对象在bool表达式中是被认为是true的。
+
+其次，向`void*`的转换是被认为低于从派生类指针到基类指针的转换的，并且，如果转换的多个目标类之间存在继承关系，那么向最近的父类的转换优先，比如
+
+```c++
+class Interface {...};
+class CommonProcesses:public Interface {...};
+
+class Machine:public CommonProcess {...};
+
+char* serialize(Interface*);	  //#1	
+char* serialize(CommonProcess*);  //#2
+
+void dump(Machine* machine)
+{
+    char* buff=serialize(machine); //#2
+}
+```
+
+这里选择#2也是符合直觉的。
+
+对于成员指针也有一条类似的规则：对于向两个相关的成员指针类型的转换，更接近的那个父类优先。
+
+### C.3.4 Initializer Lists
+
+初始化列表实际参数(用`{}`括起来的初始化器)，可以转换成许多不同类型的形式参数：initializer_list，有用initializer_list构造的类类型，初始化列表的元素可以独立的作为构造函数的参数的类类型，或者其组成可以用初始化列表初始化的聚合类类型。下面是一些例子
+
+```c++
+#include <initializer_list>
+#include <string>
+#include <vector>
+#include <complex>
+#include <iostream>
+
+void f(std::initializer_list<int>)
+{
+    std::cout<<"#1\n";
+}
+void f(std::initializer_list<std::string>)
+{
+    std::cout<<"#2\n";
+}
+void g(std::vector<int> const& vec)
+{
+    std::cout<<"#3\n";
+}
+void h(std::complex<double> const& cmplx)
+{
+    std::cout<<"#4\n";
+}
+struct Point
+{
+    int x,y;
+};
+void i(Point const& pt)
+{
+    std::cout<<"#5\n";
+}
+int main()
+{
+    f({1,2,3});  //#1
+    f({"hello","initializer","list"});  //#2
+    g({1,1,2,3,5});  //#3
+    h({1.5,2.5});  //#4
+    i({1,2});  //#5
+}
+```
+
+
+
