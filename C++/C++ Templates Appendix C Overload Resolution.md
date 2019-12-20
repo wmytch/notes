@@ -372,5 +372,133 @@ int main()
 }
 ```
 
+在对`f()`的两次调用中，初始化列表参数被转换成`std::initializer_list`值，包括把参数列表中的元素转换成`std::initializer_list`的元素的类型。#1调用中，元素已经是int，所以不需要再对元素做类型转换。#2调用中，需要调用`string(char const*)`把参数列表的元素转换`std::string`。#3调用中，则进行了一次用户定义的转换，使用了`std::vector(std::initializer_list<int>)`这个构造函数。#4调用调用了`std::complex(double,double)`这个构造函数。#5调用则做了一次聚合初始化，所谓聚合初始化，这里指的是直接用初始化列表初始化了一个Point对象，而没有调用Point的构造函数。聚合初始化只适用于C++中一些聚合类型，比方说数组，或者简单的C类型的类，没有用户定义的构造函数，没有是私有或保护的非静态数据成员，没有基类，没有虚函数，c++14前也不能有缺省的成员初始化器，另外从C++17开始允许有public的基类。
 
+函数调用把初始化列表参数转换成`initializer_list`时，其在重载解析中的层级等同于对列表的元素转换时层级最低的那个元素转换，比如
 
+```c++
+void ovl(std::initializer_list<char>)	//#1
+{
+    ...
+}
+void ovl(std::initializer_list<int>)	//#2
+{
+    ...
+}
+
+int main()
+{
+    ovl({'h','e','l','l','o','\0'});	//#1
+    ovl({'h','e','l','l','o',0});		//#2
+}    
+```
+
+对于第一个调用，#1每一个元素都不需要转换，#2需要把元素提升至int，所以#1是个完美匹配，层级高于#2.
+
+对于第二个调用，列表中的元素0是个int，对于#1，这个0需要一个从int到char的标准转换，所以这个列表的转换层级就是个标准转换，而对于#2，除了0之外其他的元素需要一个提升，所以这个列表的转换层级就被认为是提升，所以#2是一个比#1更好的匹配。
+
+当用初始化列表来初始化一个类类型的对象是，比如上面对`g()`和`h())`的调用，重载解析分成两阶段进行
+
+1. 第一阶段只考虑初始化列表构造函数，也就是唯一参数是个`std::initializer_list<T>`，并且这个参数不能是缺省参数的构造函数，其中T是某种类型，并且移除了最外层引用和const/volatile限定符。
+2. 如果没有上述的可行构造函数，在考虑其他函数。
+
+如果初始化列表参数为空，并且类有缺省构造函数，则直接调用缺省构造函数，而略过第一阶段。
+
+于是，任意的初始化列表构造函数都是比其它构造函数更好的匹配。
+
+```c++
+template<typename T>
+struct Array
+{
+    Array(std::initializer_list<T>) //#1
+    {...}
+    Array(unsigned n,T const&)		//#2
+    {...}
+};
+
+void arr1(Array<int>)
+{
+    ...
+}
+void arr2(Arry<std::string>)
+{
+    ...
+}
+
+int main()
+{
+    arr1({1,2,3,4,5});		//#1
+    arr1({1,2});  			//#1
+    arr1({10u,5});			//#1
+    arr2({"hello","initializer","list"});	//#1
+    arr2({10,"hello"});		//#2
+}
+```
+
+显然，对于上面的前4次调用，都可以用初始化列表来构造一个Array对象，因此会被优先选择，而第5次调用，显然不能用初始化列表构造函数来构造一个`Array<std::string>`，于是选用了非初始化列表构造函数。
+
+### C.3.5 Functors and Surrogate Functions
+
+前面提到过的函数名字组成的重载集会依情况做些调整。比方说一个调用表达式指向一个类类型对象而不是一个函数，那么就会给这个重载集额外添加两项。
+
+第一项很直接，就是成员函数`operator()`。
+
+另外一项没那么明显，当一个类具有向函数指针类型或者函数引用类型转换的隐含转换操作符时，一个假函数或者叫代理函数就会被加入重载集。当然，这个隐含转换操作符也必须满足一些限制，比如一个非const的操作符不能适用于const的对象。除了转换函数的目标类型对应的参数外，这个代理函数候选还有一个隐含参数，其类型由转换函数指定。
+
+```c++
+using FuncType=void (double,int);
+class IndirectFuntor
+{
+    public:
+    	void operator()(double,double) const;
+    	operator FuncType*() const;
+};
+
+void activate(IndirectFunctor const& funcObj)
+{
+    funcObj(3,5);  //Error:不明确
+}
+```
+
+`funcObj(3,5)`这个调用被处理成一个有三个参数的调用，三个参数分别是funcObj，3，5。可行函数候选包括成员函数`operator()`，其参数类型是三个：IndirectFuntor const&，double，double，以及一个代理函数，其参数类型是：FuncType*，double，int。隐含参数的匹配上代理函数要糟一些，但其后两个参数是更好的匹配，于是这里就发生了不明确。
+
+幸运的是代理函数是C++中最角落的东西，并且也很少见。
+
+### C.3.6 Other Overloading Contexts
+
+目前为止讨论了函数调用表达式中对重载函数选择的问题，除此之外，还有一些其他的场合需要考虑函数选择的问题。
+
+第一个问题发生在当需要一个函数的地址时，比如
+
+```c++
+int numElems(Matrix const&); //#1
+int numElems(Vector const&); //#2
+...
+int (*funcPtr)(Vector const&)=numElems;  //选择#2
+```
+
+这里重载解析会对所需的函数类型与候选函数进行匹配。
+
+其他需要重载解析的场合是初始化，不过这个话题太大，这里就举些例子说明
+
+```c++
+class BigNum
+{
+	public:
+		BigNum(long n);  	//#1
+    	BigNum(double n); 	//#2
+    	BigNum(std::string const&);	//#3
+    	...
+        operator double(); 	//#4
+    	operator long();	//#5
+};
+
+void initDemo()
+{
+    BigNum bn1(100103);	//#1
+    BigNum bn2("70057103224.095764"); //#3
+    int in=bn1;	//#5
+}
+```
+
+大多数情况下，重载解析的结果是符合直觉的，但是这些规则的细节相当复杂，并且有些应用也依赖于某些C++语言中犄角旮旯的特性。
