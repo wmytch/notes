@@ -223,8 +223,6 @@ const char *evutil_inet_ntop(int af, const void *src, char *dst, size_t len);
 int evutil_inet_pton(int af, const char *src, void *dst);
 ```
 
-These functions behave as the standard inet_ntop() and inet_pton() functions for parsing and formatting IPv4 and IPv6 addresses, as specified in RFC3493.  That is, to format an IPv4 address, you call evutil_inet_ntop() with *af* set to AF_INET, *src* pointing to a struct in_addr, and *dst* pointing to a character buffer of size *len*.  For an IPv6 address, *af* is AF_INET6 and *src* is a struct in6_addr.  To parse an IPv4 address, call evutil_inet_pton() with *af* set to AF_INET or AF_INET6, the string to parse in *src*, and *dst* pointing to an in_addr or an in_addr6 as appropriate.
-
 这两个函数与标准的` inet_ntop()`和`inet_pton()`是一致的，都可以用来处理IPv4和IPv6。因此：
 
 调用`evutil_inet_ntop()`时
@@ -244,8 +242,6 @@ These functions behave as the standard inet_ntop() and inet_pton() functions for
 int evutil_parse_sockaddr_port(const char *str, struct sockaddr *out,
     int *outlen);
 ```
-
-This function parses an address from *str* and writes the result to *out*.  The *outlen* argument must point to an integer holding the number of bytes available in *out*; it is altered to hold the number of bytes actually used.  This function returns 0 on success and -1 on failure.  It recognizes the following address formats:
 
 这个函数解析str表示的地址，然后将结果写入out，outlen作为传入参数时是out的大小，作为传出参数时是作为结果的out的大小。
 
@@ -271,8 +267,6 @@ This function parses an address from *str* and writes the result to *out*.  The 
 int evutil_sockaddr_cmp(const struct sockaddr *sa1,
     const struct sockaddr *sa2, int include_port);
 ```
-
-The evutil_sockaddr_cmp() function compares two addresses, and returns negative if sa1 precedes sa2, 0 if they are equal, and positive if sa2 precedes sa1.  It works for AF_INET and AF_INET6 addresses, and returns undefined output for other addresses.  It’s guaranteed to give a total order for these addresses, but the ordering may change between Libevent versions.
 
 如果sa1地址在sa2前面，则返回负数，如果相等则返回0，如果sa2在前面则返回正数。只对AF_INET 和 AF_INET6地址有效，其它地址返回未定义。比较是全序的，但是具体顺序可能依Libevent版本而变。
 

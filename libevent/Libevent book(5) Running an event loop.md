@@ -188,8 +188,6 @@ int event_base_update_cache_time(struct event_base *base);
 void event_base_dump_events(struct event_base *base, FILE *f);
 ```
 
-For help debugging your program (or debugging Libevent!) you might sometimes want a complete list of all events added in the event_base and their status. Calling event_base_dump_events() writes this list to the stdio file provided.
-
 为了帮助调试程序或者Libevent，有时候可能需要一个完整的列表，包含所有添加到event_base中的事件及其状态。这时候可以调用event_base_dump_events把这个列表写到文件中去。
 
 这个列表是用来给人看的，所以其格式可能会随Libevent版本改变而变。

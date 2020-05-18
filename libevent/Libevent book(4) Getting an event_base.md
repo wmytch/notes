@@ -317,8 +317,6 @@ if (fork()) {
 
 ##　Obsolete event_base functions
 
-Older versions of Libevent relied pretty heavily on the idea of a "current" event_base.  The "current" event_base was a global setting shared across all threads.  If you forgot to specify which event_base you wanted, you got the current one.  Since event_bases weren’t threadsafe, this could get pretty error-prone.
-
 旧版本的Libevent非常着重于"当前"event_base的概念。“当前”event_base是一个全局设定，由所有的线程共享。如果忘记了指定所需要的event_base，就会得到当前这一个。由于event_base不是线程安全的，这就会相当大容易出错。
 
 ### event_init

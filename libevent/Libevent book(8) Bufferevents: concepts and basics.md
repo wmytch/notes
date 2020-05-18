@@ -11,24 +11,6 @@
 
 Libevent为这种常见的缓冲IO模式提供了一套通用机制，也就是“Bufferevent”，包括了底层的传输(类似socket)，一个读缓冲，一个写缓冲。常规的event，是通过回调函数来处理底层传输的可读或者可写。而对于bufferevent，则是调用用户提供的回调函数来处理有足够的数据可读或者可写。这里主要的区别不在于对回调的形容，而是常规event处理的是传输层，比方说socket的可读可写事件，bufferevent处理的是数据本身，或者说缓冲区里数据的数量引发的事件。
 
-There are multiple types of bufferevent that all share a common interface.  As of this writing, the following types exist:
-
-- socket-based bufferevents
-
-    ​    A bufferevent that sends and receives data from an underlying    stream socket, using the event_* interface as its backend.
-
-- asynchronous-IO bufferevents
-
-    ​    A bufferevent that uses the Windows IOCP interface to send and    receive data to an underlying stream socket.  (Windows only;    experimental.)
-
-- filtering bufferevents
-
-    ​    A bufferevent that processes incoming and outgoing data before    passing it to an underlying bufferevent object—for example, to    compress or translate data.
-
-- paired bufferevents
-
-    ​    Two bufferevents that transmit data to one another.
-
 下面是目前为止所有的bufferevent的类型，它们共享一个公共的接口：
 
 - 基于socket的bufferevent

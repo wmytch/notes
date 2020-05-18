@@ -353,19 +353,17 @@ int event_add(struct event *ev, const struct timeval *tv);
 int event_del(struct event *ev);
 ```
 
-Calling event_del on an initialized event makes it non-pending and non-active.  If the event was not pending or active, there is no effect.  The return value is 0 on success, -1 on failure.
-
 对一个已初始化的event调用event_del会使其变成非挂起和非活动的。如果event不处于挂起或者活动状态，调用这个函数无效。也就是说，这个函数不是要销毁event，只是使其与base脱离关联。
 
 要注意如果在一个事件变成活动的但其回调还没有机会执行的时候调用这个函数，其回调将不会被执行。
+
+成功返回0，失败返回-1。
 
 ### event_remove_timer
 
 ```c
 int event_remove_timer(struct event *ev);
 ```
-
-Finally, you can remove a pending event’s timeout completely without deleting its IO or signal components.  If the event had no timeout pending, event_remove_timer() has no effect.  If the event had only a timeout but no IO or signal component, event_remove_timer() has the same effect as event_del(). The return value is 0 on success, -1 on failure.
 
 这个函数用来完全移除一个挂起事件的超时，而不会删除其IO和信号部分。如果事件本身没有超时设置，这个函数不会起效。如果一个事件只有超时而没有IO或者信号，这个函数的效果等同于event_del。
 

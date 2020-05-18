@@ -341,7 +341,7 @@ evthread_condition_callbacks结构描述了与条件变量相关的回调函数�
 
 ## Debugging lock usage
 
-To help debug lock usage, Libevent has an optional "lock debugging" feature that wraps its locking calls in order to catch typical lock errors, including为了便于调试锁的使用，Libevent有一个可选的"lock debugging”特性，封装了其与锁相关的调用，可以捕获典型锁相关错误：
+为了便于调试锁的使用，Libevent有一个可选的"lock debugging”特性，封装了其与锁相关的调用，可以捕获典型锁相关错误：
 
 - 解锁一个没有所有权的锁
 - 对一个非递归锁再次加锁
