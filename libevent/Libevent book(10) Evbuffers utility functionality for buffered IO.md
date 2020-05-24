@@ -7,12 +7,10 @@ Libevent 的evbuffer实现了一个字节队列，并对其在尾端添加数据
 ## Creating or freeing an evbuffer
 
 ### evbuffer_new
-
-### evbuffer_new
-
+### evbuffer_free
 ```c
 struct evbuffer *evbuffer_new(void);
-void evbuffer_new(struct evbuffer *buf);
+void evbuffer_free(struct evbuffer *buf);
 ```
 
 evbuffer_new分配并返回一个新的空evbuffer，evbuffer_free删除一个evbuffer及其全部内容。
