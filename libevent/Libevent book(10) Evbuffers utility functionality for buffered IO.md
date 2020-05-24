@@ -6,7 +6,7 @@ Libevent 的evbuffer实现了一个字节队列，并对其在尾端添加数据
 
 ## Creating or freeing an evbuffer
 
-###evbuffer_new
+### evbuffer_new
 
 ### evbuffer_new
 
@@ -67,7 +67,7 @@ int evbuffer_add(struct evbuffer *buf, const void *data, size_t datlen);
 
 ### evbuffer_add_printf
 
-###evbuffer_add_vprintf 
+### evbuffer_add_vprintf 
 
 ```c
 int evbuffer_add_printf(struct evbuffer *buf, const char *fmt, ...)
@@ -117,7 +117,7 @@ evbuffer_remove_buffer从src向dst尾端移动datlen那么多字节的数据，�
 
 ### evbuffer_prepend
 
-###evbuffer_prepend_buffer 
+### evbuffer_prepend_buffer 
 
 ```c
 int evbuffer_prepend(struct evbuffer *buf, const void *data, size_t size);
@@ -848,9 +848,7 @@ int evbuffer_add_file(struct evbuffer *output, int fd, ev_off_t offset,
 
 ## Fine-grained control with file segments
 
-The evbuffer_add_file() interface is inefficient for adding the same file more than once, since it takes ownership of the file.
-
-evbuffer_add_file在对同一个文件多次操作时效率不高，因为其需要
+evbuffer_add_file在对同一个文件多次操作时效率不高，因为其需要拿走文件的所有权。当然，这里的意思是独占文件或者说需要打开文件的全部内容，文件的属性显然不能随意变更的。
 
 ### evbuffer_file_segment_new
 
@@ -911,7 +909,7 @@ void evbuffer_file_segment_add_cleanup_cb(struct evbuffer_file_segment *seg,
 
 evbuffer_file_segment_add_cleanup_cb用来设置一个回调函数，以供当对文件片段的最后一个引用被释放，随即要释放文件片段时调用。这个回调函数**不能**试图再激活该文件片段，不能将其添加到任意的缓冲上，等等。
 
-### ## Adding an evbuffer to another by reference
+## Adding an evbuffer to another by reference
 
 可以把一个evbuffer的引用添加到另一个evbuffer上，而不是将一个evbuffer的内容添加到另一个evbuffer，并将原evbuffer的内容抹掉，这时候在另一个evbuffer上使用这个引用，就好像把原evbuffer的数据全部复制过来一样。
 
@@ -934,7 +932,7 @@ int evbuffer_add_buffer_reference(struct evbuffer *outbuf,
 
 ### evbuffer_freeze
 
-###evbuffer_unfreeze 
+### evbuffer_unfreeze 
 
 ```c
 int evbuffer_freeze(struct evbuffer *buf, int at_front);
@@ -943,4 +941,4 @@ int evbuffer_unfreeze(struct evbuffer *buf, int at_front);
 
 用来临时禁用对evbuffer头部或者尾部的变更。bufferevent内部使用来避免对输出缓冲的头部或者输入缓冲的尾部偶然的变更。
 
-### 
+ 
