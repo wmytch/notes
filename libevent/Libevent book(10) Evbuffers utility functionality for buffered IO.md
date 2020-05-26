@@ -2,7 +2,7 @@
 
 [TOC]
 
-Libevent 的evbuffer实现了一个字节队列，并对其在尾端添加数据和在前端移除数据的操作做了优化。Evbuffer专注于缓冲网络IO的缓冲部分的通用性，并不提供对IO的调度和IO的触发的操作，这些是bufferevent的工作。
+Libevent的evbuffer实现了一个字节队列，并对其在尾端添加数据和在前端移除数据的操作做了优化。Evbuffer专注于缓冲网络IO的缓冲部分的通用性，并不提供对IO的调度和IO的触发的操作，这些是bufferevent的工作。
 
 ## Creating or freeing an evbuffer
 
@@ -111,7 +111,7 @@ evbuffer_add_buffer把src的所有数据移动到dst的尾端。成功返回0，
 
 evbuffer_remove_buffer从src向dst尾端移动datlen那么多字节的数据，如果可移动数据的长度不足datlen，就全部移过去，但是任何时候都不会超过datlen个字节。成功则返回移动的数据长度。
 
-## Adding data to thInterface
+## Adding data to the front of an evbuffer
 
 ### evbuffer_prepend
 
@@ -339,7 +339,7 @@ pos域是唯一的公开域，其它部分不应该被用户代码使用。pos�
 struct evbuffer_ptr evbuffer_search(struct evbuffer *buffer,
     const char *what, size_t len, const struct evbuffer_ptr *start);
 ```
-函数扫描缓冲，寻找长度为*len*的字符串*what，*如果存在，则返回包含这个字符串位置的evbuffer_ptr ，否则返回-1。
+函数扫描缓冲，寻找长度为*len*的字符串`*what`，如果存在，则返回包含这个字符串位置的evbuffer_ptr ，否则返回-1。
 
 如果提供了start参数，则从start开始查找，否则，从头开始查找，注意，指的是buffer的开头，不是what字符串的开头，原文这里用string是有些误导的。
 
@@ -411,7 +411,7 @@ int count_instances(struct evbuffer *buf, const char *str)
 
 ## Inspecting data without copying it
 
-有时候，可能需要从evbuffer中读数据而不复制出来(比如evbuffer_copyout会复制数据)，或者重新安排evbuffer的内部存储布局(比如evbuffer_pullup)。有时候也可能想看看evbuffer中间部分的数据。这时候就可以使用：
+有时候，可能需要从evbuffer中读数据，但不需要复制出来(比如evbuffer_copyout会复制数据)，或者不重新安排evbuffer的内部存储布局(比如evbuffer_pullup)。有时候也可能想看看evbuffer中间部分的数据。这时候就可以使用：
 
 ### evbuffer_peek
 
@@ -432,7 +432,7 @@ int evbuffer_peek(struct evbuffer *buffer, ev_ssize_t len,
 
 如果len大于0，则所填写的evbuffer_iovec结构的个数取决于这些evbuffer_iovec对应的内存块的数据总量，实际上获取到的全部内存块数据的总量可能会大于len。如果函数能够获取所要求的所有数据，那么就会返回实际上使用的evbuffer_iovec结构的数量。如果函数不能够获取所要求的的数据量，则返回所需要提供的evbuffer_iovec结构的数量，也就是说，如果len长度那么多的数据不足以通过n_vec个evbuffer_iovec结构来获取，那么就返回为了满足这个len长度要求而提供的evbuffer_iovec数量，换句话说就是，这个时候在evbuffer内部有这么多个内存块，它们的数据总量满足len，但是n_vec小于这个数字。
 
-如果start_at为空，则evbuffer_peek从缓冲的起始开始，否则，就从start_at所指的位置开始，不过这时候所返回的第一个evbuffer_iovec的iov_base指向的不一定是对应内存块的起始位置，可能会有一个偏移，iov_len也不是完整的内存块的长度，而是从iov_base到末尾的长度。注意一下，原文这里是ptr而不是start_at，从上下文看，应该是start_at。不过这时候
+如果start_at为空，则evbuffer_peek从缓冲的起始开始，否则，就从start_at所指的位置开始，不过这时候所返回的第一个evbuffer_iovec的iov_base指向的不一定是对应内存块的起始位置，可能会有一个偏移，iov_len也不是完整的内存块的长度，而是从iov_base到末尾的长度。注意一下，原文这里是ptr而不是start_at，从上下文看，应该是start_at。
 
 ### 例子
 

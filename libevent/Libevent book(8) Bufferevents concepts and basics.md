@@ -9,7 +9,7 @@
 - 写入尽可能多的数据。
 - 如果还有数据要写，记录写了多少数据，等待连接下一次变得可写入。
 
-Libevent为这种常见的缓冲IO模式提供了一套通用机制，也就是“Bufferevent”，包括了底层的传输(类似socket)，一个读缓冲，一个写缓冲。常规的event，是通过回调函数来处理底层传输的可读或者可写。而对于bufferevent，则是调用用户提供的回调函数来处理有足够的数据可读或者可写。这里主要的区别不在于对回调的形容，而是常规event处理的是传输层，比方说socket的可读可写事件，bufferevent处理的是数据本身，或者说缓冲区里数据的数量引发的事件。
+Libevent为这种常见的缓冲IO模式提供了一套通用机制，也就是“Bufferevent”，包括了底层的传输(比如socket)，一个读缓冲，一个写缓冲。常规的event，是通过回调函数来处理底层传输的可读或者可写。而对于bufferevent，则是有足够的数据可读或者可写时调用用户提供的回调函数来处理。这里主要的区别不在于对回调的形容，而是常规event处理的是传输层，比方说socket的可读可写事件，bufferevent处理的是数据本身，或者说缓冲区里数据的数量引发的事件。
 
 下面是目前为止所有的bufferevent的类型，它们共享一个公共的接口：
 
@@ -78,7 +78,7 @@ bufferevent还有”error”或者”event”回调，用来告知应用一些�
 
 - BEV_EVENT_ERROR
 
-     在操作bufferevent是发生的错误，调用`EVUTIL_SOCKET_ERROR()`来获知是什么错误。
+     在操作bufferevent时发生的错误，调用`EVUTIL_SOCKET_ERROR()`来获知是什么错误。
 
 - BEV_EVENT_TIMEOUT
 
@@ -94,7 +94,7 @@ bufferevent还有”error”或者”event”回调，用来告知应用一些�
 
 ##  Deferred callbacks
 
-缺省情况下，一个bufferevent回调当对应情况发生时就会马上执行，对应evbuffer回调也是如此。这种即时调用在依赖性比较复杂时可能会造成麻烦，比方说，假定一个回调在evbuffer A变空时向其写入数据，另一个回调在evbuffer A满的时候处理其中的数据，由于这些回调是在栈上发生的，当依赖性变得一团糟时可能就会有栈溢出的风险。
+缺省情况下，一个bufferevent回调当对应情况发生时就会马上执行，对应evbuffer回调也是如此。这种即时调用在依赖性比较复杂时可能会造成麻烦，比方说，假定一个回调在evbuffer A变空时向其写入数据，另一个回调在evbuffer A满的时候处理其中的数据，由于这些回调是在栈上发生的，当依赖性比较复杂时可能就会有栈溢出的风险。
 
 为了解决这个问题，可以告知bufferevent或者evbuffer，其回调应该延时调用。当一个延时回调的条件满足时，并不会马上调用，而是在`event_loop()`中排队，如常规事件一样等待被调用。
 
@@ -108,7 +108,7 @@ bufferevent还有”error”或者”event”回调，用来告知应用一些�
 
 - BEV_OPT_THREADSAFE
 
-    自动分配为bufferevent锁，这样可以在多线程中安全的使用。
+    自动为bufferevent分配锁，这样可以在多线程中安全的使用。
 
 - BEV_OPT_DEFER_CALLBACKS
 
@@ -116,7 +116,7 @@ bufferevent还有”error”或者”event”回调，用来告知应用一些�
 
 - BEV_OPT_UNLOCK_CALLBACKS
 
-    缺省情况下，bufferevent是设置为线程安全的，当一个用户提供的回调调用时，bufferevent都会锁定。这个参数使得bufferevent在调用回调是释放其锁。
+    缺省情况下，bufferevent是设置为线程安全的，当一个用户提供的回调调用时，bufferevent都会锁定。这个参数使得bufferevent在调用回调时释放其锁。
 
 ## Working with socket-based bufferevents
 
@@ -135,7 +135,7 @@ struct bufferevent *bufferevent_socket_new(
 
 base是一个event_base，options是bufferevent可选项(BEV_OPT_CLOSE_ON_FREE等)的bitmask，fd是一个socket的文件描述符，如果打算之后再设置这个文件描述符，可以将其设为-1。
 
-注意确保把提供给bufferevent_socket_new的socket设置为非堵塞的。Libevent提供的evutil_make_socket_nonblocking可以很方便的用来实现这点。
+注意确保把提供给bufferevent_socket_new的socket设置为非堵塞的。Libevent提供的evutil_make_socket_nonblocking可以很方便的用来实现这点。如果使用evconnlistener的话，相关的socket实际上是会缺省设置为非堵塞的。
 
 成功返回一个bufferevent，失败返回NULL。注意是指针。
 
@@ -216,16 +216,17 @@ int bufferevent_socket_connect_hostname(struct bufferevent *bev,
     struct evdns_base *dns_base, int family, const char *hostname,
     int port);
 ```
-#### bufferevent_socket_get_dns_error
-```c
-int bufferevent_socket_get_dns_error(struct bufferevent *bev);
-```
-
 函数解析DNS名称hostname，查找类型为family的地址。允许的family类型是AF_INET, AF_INET6, AF_UNSPEC。如果名字解析失败，调用event回调，如果成功，则发起与bufferevent_connect一样的连接操作。
 
 dns_base参数是可选的，如果为NULL，则Libevent在名字查找完成前堵塞，这通常并不是所想要的。如果提供了，则Libevent使用这个参数以异步方式查找主机名。具体可参见后面关于DNS的章节。
 
 与`bufferevent_socket_connect()`一样，这个函数在解析完成以及连接成功之前，都会告知Libevent，bufferevent已有的socket还没有连接，不应该在其上进行读或写操作。
+
+#### bufferevent_socket_get_dns_error
+
+```c
+int bufferevent_socket_get_dns_error(struct bufferevent *bev);
+```
 
 如果有错误发生，可能是个DNS主机名查找错误。通过调用`bufferevent_socket_get_dns_error()`可以找到最近发生的错误。如果返回的错误码为0，则表示没有检测到DNS错误。
 
@@ -606,7 +607,7 @@ void bufferevent_set_timeouts(struct bufferevent *bufev,
 
 注意只有当bufferevent打算开始读或者写的时候才开始计时。换句话说，如果bufferevent禁止读，或者当输入缓冲满了(达到高水线)，那么读超时就不会启用。类似的，如果写被禁止，或者没有数据可写，则写超时也不会启用。简单的说，就是bufferevent要开始读或写了，才会开始计时，如果根本就没有或者打算进行这个操作，那么就不会计时。
 
-但读或者写超时发生时，在bufferevent上相应的读或写操作会被禁止，然后调用事件回调函数，其标记参数为BEV_EVENT_TIMEOUT|BEV_EVENT_READING或者BEV_EVENT_TIMEOUT|BEV_EVENT_WRITING。
+但读或者写超时发生时，在bufferevent上相应的读或写操作会被禁止，然后调用事件回调函数，这时候其调用参数标记为BEV_EVENT_TIMEOUT|BEV_EVENT_READING或者BEV_EVENT_TIMEOUT|BEV_EVENT_WRITING。
 
 ### Initiating a flush on a bufferevent
 
@@ -617,7 +618,7 @@ int bufferevent_flush(struct bufferevent *bufev,
     short iotype, enum bufferevent_flush_mode state);
 ```
 
-刷新一个bufferevent表示bufferevent要强制地使底层传输读入或者发送尽可能多的数据，并忽略其它任何的限制。注意指的是把数据接收到底层传输或者从底层传输发送出去，而不是从bufferevent的输入缓冲把数据读取到应用，或者把应用的数据写入到输出缓冲。
+刷新一个bufferevent表示bufferevent要强制地使底层传输读入或者发送尽可能多的数据，并忽略其它任何的限制。注意指的是在底层传输接受或者发送数据，而不是从bufferevent的输入缓冲把数据读取到应用，或者把应用的数据写入到输出缓冲，当然，底层数据变化会引发bufferevent的可读可写事件。
 
 iotype参数应该是EV_READ、EV_WRITE或者EV_READ|EV_WRITE。state参数可以是BEV_NORMAL、BEV_FLUSH、BEV_FINISHED之一，BEV_FINISHED表示另一端应该告知没有更多数据发送了，BEV_NORMAL和BEV_FLUSH的区别取决于bufferevent的类型。
 
@@ -645,7 +646,7 @@ bufferevent_get_priority获取的是bufev对应的events的优先权，不存在
 
 #### bufferevent_setfd
 
-####bufferevent_getfd 
+#### bufferevent_getfd 
 
 ```c
 int bufferevent_setfd(struct bufferevent *bufev, evutil_socket_t fd);

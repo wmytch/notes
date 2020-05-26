@@ -15,7 +15,7 @@ int bufferevent_pair_new(struct event_base *base, int options,
     struct bufferevent *pair[2]);
 ```
 
-调用bufferevent_pair_new会把`pair[0]`和`pair[1]`设置为一对相互连接的bufferevent。除了不支持BEV_OPT_CLOSE_ON_FREE，因为其没有意义，以及BEV_OPT_DEFER_CALLBACKS，因为其总是打开的，之外通常的可选项都是支持的。
+调用bufferevent_pair_new会把`pair[0]`和`pair[1]`设置为一对相互连接的bufferevent。除了不支持BEV_OPT_CLOSE_ON_FREE，因为其没有意义，以及BEV_OPT_DEFER_CALLBACKS，因为其总是支持的，之外通常的可选项都是支持的。
 
 为什么成对bufferevent要延迟运行回调？有个很常见的场景，对成对bufferevent中的一个进行操作，从而调用其回调改变了该bufferevent，接下来又会调用另外一个bufferevent的回调，然后不断的反复。如果回调不延时，这个调用链可能会很频繁，以致栈溢出，吞噬其它连接，然后使得所有回调重入。
 
@@ -66,7 +66,7 @@ options支持所有的常规可选项。如果设置了BEV_OPT_CLOSE_ON_FREE，�
 
 只要有数据成功的写入目标缓冲，过滤函数返回BEV_OK，如果只有在从输入得到更多的数据，或者使用了其它的刷新模式，才能继续向输出缓冲写入时，就会返回BEV_NEED_MORE，如果过滤器发生不可恢复的错误，则返回BEV_ERROR。
 
-创建过滤器就启用了底层bufferevent的可读和可写。不需要在自己管理读写，过滤器在不需要读的时候会自动挂起从底层bufferevent的读取。对2.0.8-rc及之后的版本，对底层bufferevent的读写设定可以独立于过滤器，但是这样的话，可能会使得过滤器不能成功在需要时得到数据。
+创建过滤器就启用了底层bufferevent的可读和可写。不需要在自己管理读写，过滤器在不需要读的时候会自动挂起从底层bufferevent的读取。对2.0.8-rc及之后的版本，对底层bufferevent的读写设定可以独立于过滤器，但是如果真的这样做的话，可能会使得过滤器不能成功在需要时得到数据。
 
 输入过滤和输出过滤函数不需要全部指定，被忽略的过滤函数会被直接传输而不转换的函数替代。
 
@@ -200,7 +200,7 @@ ev_ssize_t bufferevent_rate_limit_group_get_write_limit(
         struct bufferevent_rate_limit_group *);
 ```
 
-函数分别返回各自名字所示的令牌桶的当前大小。要注意的是如果一个bufferevent被强制的超出其所分配的大小，返回值可能为负值，比方说刷新一个bufferevent可能会照成这种情况。
+函数分别返回各自名字所示的令牌桶的当前大小。要注意的是如果在某种操作时，一个bufferevent实际的令牌桶被强制的超出其所分配的大小，返回值可能为负值，比方说刷新一个bufferevent可能会造成这种情况。
 
 #### bufferevent_get_max_to_read
 #### bufferevent_get_max_to_write
@@ -271,7 +271,7 @@ int bufferevent_rate_limit_group_set_min_share(
 - 读限制的实现依赖于TCP的栈noticing，应用只能以一定的速率消费数据，当缓冲满的时候把数据发送到TCP连接的另一端。
 - 一些bufferevent的实现(特别是Windows IOCP实现)可能会overcommit，大体上就是实际可分配内存不足。
 - 这里的原文比较拗口，就说个大概意思，bufferevent的速率限制是通过tick来计算的，计算的时候如果tick不是个整数，比方说是N.1，那么就会按照N+1来计算。
-- tick的值不能小于一毫秒，任何比一豪秒还小的分量就忽略了。所以如果tick设置了微秒字段，这个微秒会除以1000再计入。
+- tick的值不能小于一毫秒，任何比一毫秒还小的分量就忽略了。所以如果tick设置了微秒字段，这个微秒会除以1000再计入。
 
 ## Bufferevents and SSL
 

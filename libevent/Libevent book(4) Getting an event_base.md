@@ -4,7 +4,7 @@
 
 ## Creating an event_base
 
-在使用Libevent函数前，必须先分配一个或者多个event_base结构。每一个event_base结构都持有一个事件集并通过轮训来检查活动的事件。
+在使用Libevent函数前，必须先分配一个或者多个event_base结构。每一个event_base结构都持有一个事件集并通过轮询来检查活动的事件。
 
 如果一个event_base被设置为使用锁，那么在多个线程中对其进行访问是安全的，但是其循环只能在单独的一个线程中进行，如果需要多个线程轮询IO，就需要每个线程一个event_base。
 
@@ -50,7 +50,7 @@ void event_config_free(struct event_config *cfg);
 
 调用`event_config_new()`得到一个新的 event_config，然后调用下面将要描述的函数来设置event_config，最后，调用`event_base_new_with_config() `得到一个新的event_base。所有工作完成之后，可以用`event_config_free()`释放event_config，至于什么时候可以释放event_config，按照一般道理，如果将来不再使用的话，event_base_new_with_config返回之后就可以释放了，但是谁又说得准程序中什么时候又要用呢，所以，我觉得要么不管它，等程序退出时自动清理，如果一些工具提示资源泄露，那再说。
 
-需要注意的是，如果一个配置Libevent无法满足，`event_base_new_with_config()`将返回NULL。  For example, as of Libevent 2.0.1-alpha, there is no O(1) backend for Windows, and no backend on Linux that provides both EV_FEATURE_FDS and EV_FEATURE_O1。比如，在Libevent 2.0.1-alpha，对于Windows没有O(1)的后端，对于Linux不存在同时满足EV_FEATURE_FDS和EV_FEATURE_O1的后端。
+需要注意的是，如果Libevent无法满足一个配置，`event_base_new_with_config()`将返回NULL。  比如，对于Libevent 2.0.1-alpha，Windows没有O(1)的后端，Linux不存在同时满足EV_FEATURE_FDS和EV_FEATURE_O1的后端。
 
 ### event_config_avoid_method
 
@@ -103,7 +103,7 @@ int event_config_set_flag(struct event_config *cfg,
 
 - EVENT_BASE_FLAG_IGNORE_ENV
 
-    挑选后端方法时不检查` EVENT_*`环境变量。在使用这个标记前要考虑清楚：这可能会使得用户难以调试程序与Libevent之间的互动。
+    挑选后端方法时不检查` EVENT_*`环境变量。在使用这个标记前要考虑清楚：这可能会使得用户难以调试程序与Libevent之间的交互。
 
 - EVENT_BASE_FLAG_STARTUP_IOCP
 
@@ -111,7 +111,7 @@ int event_config_set_flag(struct event_config *cfg,
 
 - EVENT_BASE_FLAG_NO_CACHE_TIME
 
-    不是每当事件循环即将运行超时回调函数时检查当前时间，而是在超时回调完成后检查。这可能会大量耗费CPU，所以千万注意。
+    不是在每当事件循环即将运行超时回调函数时检查当前时间，而是在超时回调完成后检查。这可能会大量耗费CPU，所以千万注意。
 
 - EVENT_BASE_FLAG_EPOLL_USE_CHANGELIST
 

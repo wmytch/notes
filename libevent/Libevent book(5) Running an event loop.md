@@ -153,7 +153,7 @@ int event_base_got_break(struct event_base *base);
 int event_base_loopcontinue(struct event_base *);
 ```
 
-通常，Libevent会坚持事件，然后运行最高优先权的活动事件，然后再检查事件，等等。但有时候可能需要在当前回调结束之后停止Libevent，然后再开始扫描。对应于`event_base_loopbreak()`，这种情况可以调用函数`event_base_loopcontinue()`。
+通常，Libevent会检测事件，然后运行最高优先权的活动事件，然后再检测事件，等等。但有时候可能需要在当前回调结束之后停止Libevent，然后再开始扫描。对应于`event_base_loopbreak()`，这种情况可以调用函数`event_base_loopcontinue()`。
 
 如果当前没有正在运行的回调，则调用这个函数没有任何影响。
 
@@ -168,7 +168,7 @@ int event_base_gettimeofday_cached(struct event_base *base,
 
 有时候可能需要在一个事件回调中获取当前时间的近似视图，但是又想使用系统调用`gettimeofday()`，这时候可以使用event_base_gettimeofday_cached来获取这个视图，得到本次回调轮转开始的时间。
 
-`event_base_gettimeofday_cached()`函数设置tv_out参数的值为一个缓存的时间，如果event_base当前正在执行回调的话，否则就调用`evutil_gettimeofday() `来获取真实的当前时间。成功返回0，失败返回负数。
+如果event_base当前正在执行回调，`event_base_gettimeofday_cached()`函数设置tv_out参数的值为一个缓存的时间，否则就调用`evutil_gettimeofday() `来获取真实的当前时间。成功返回0，失败返回负数。
 
 ### event_base_update_cache_time
 

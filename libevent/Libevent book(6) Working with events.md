@@ -4,13 +4,13 @@
 
 Libevent的基本操作单位是事件，每一个事件代表一个条件或者说情况的集合，包括
 
-- 一个可以用来读或写的描述符
+- 一个已经可以用来读或写的文件描述符
 - 一个即将变成可以读或写的文件描述符(只对边缘触发的IO）
 - 超时
 - 信号
 - 用户触发的的事件
 
-事件有类似的生命周期。调用Libevent函数设置一个事件并将其与一个event base关联起来，这个事件就是**初始状态**，然后可以向base添加事件，此时事件就处于**挂起**状态，**所谓挂起，就是等待事情发生的意思，并且是与某个base关联的，**当事件处于**挂起**状态时，如果出现了会触发事件的情况或者说条件，比方说文件描述符改变状态或者超时了，则事件变为**活动**状态，并且运行其(用户定义的)回调函数。如果事件被配置为**持久**的，此时会继续保持挂起，否则，当运行回调函数时该事件就会停止挂起，或者说，退出与base的关联。可以删除一个事件使其变成非挂起的，也可以添加一个非挂起的事件使其再次挂起。
+事件也有所谓的生命周期。调用Libevent函数设置一个事件并将其与一个event base关联起来，这个事件就是**初始状态**，然后可以向base添加事件，此时事件就处于**挂起**状态，**所谓挂起，就是等待事情发生的意思，并且是与某个base关联的**，当事件处于**挂起**状态时，如果出现了会触发事件的情况或者说条件，比方说文件描述符改变状态或者超时了，则事件变为**活动**状态，并且运行其(用户定义的)回调函数。如果事件被配置为**持久**的，此时会继续保持挂起，否则，当运行回调函数时该事件就会停止挂起，或者说，退出与base的关联。可以删除一个事件使其变成非挂起的，也可以添加一个非挂起的事件使其再次挂起。
 
 ## Constructing event objects
 
@@ -33,9 +33,9 @@ struct event *event_new(struct event_base *base, evutil_socket_t fd,
 void event_free(struct event *event);
 ```
 
-event_new函数分配并构造一个由base使用的新的event。what参数是上面列出的一系列标记。如果fd非负，就代表要观察读或写事件的文件。当事件变成活动时，Libevent就会调用所提供的cb函数，并将文件描述符fd，所有触发事件组成的位域，也就是what的一个子集，以及arg作为参数传入。
+event_new函数分配并构造一个由base使用的新的event。what参数是上面列出的一系列标记。如果fd非负，就代表要观察读或写事件的文件。当事件变成活动时，Libevent就会调用所提供的cb函数，并将文件描述符fd、所有触发事件组成的位域，也就是what的一个子集、以及arg作为参数传入。
 
-发生内部错误或者参数无效是，event_new返回NULL。
+发生内部错误或者参数无效时，event_new返回NULL。
 
 所有新的event都是初始化并且非挂起的。要使得一个event变成挂起，调动event_add。
 
@@ -164,7 +164,7 @@ void run(struct event_base *base)
 }
 ```
 
-这个函数可以用于 `event_new()`, `evtimer_new()`, `evsignal_new()`, `event_assign()`, `evtimer_assign()`,  `evsignal_assign()`。不过对于非事件，并不能够将其作为一个回调参数使用。
+这个函数可以用于 `event_new()`, `evtimer_new()`, `evsignal_new()`, `event_assign()`, `evtimer_assign()`,  `evsignal_assign()`。但是对于非event回调函数，不能将其作为一个回调函数的参数使用。
 
 ## Timeout-only events
 
@@ -206,11 +206,11 @@ struct event_base *base = event_base_new();
 hup_event = evsignal_new(base, SIGHUP, sighup_function, NULL);
 ```
 
-要注意信号回调函数是在信号发生后才在事件循环中调度运行的，所以，只有确定不会使用常规的POSIX信号处理时才使用这种方式。另外，不要在信号事件中设置超时，可能会不支持。
+要注意信号回调函数是在信号发生后才在事件循环中调度运行的，所以，只有确实无法使用常规的POSIX信号处理时才使用这种方式。另外，不要在信号事件中设置超时，可能会不支持。
 
 ### Caveats when working with signals
 
-在当前版本的Libevent，大多数后端中，每个进程同时只能有一个event_base监听信号。如果一次给两event_base添加了信号事件，即使两个信号是不同的，也只有一个event_base可以接收到信号。
+在当前版本的Libevent，大多数后端中，每个进程同时只能有一个event_base监听信号。如果一次给两个event_base添加了信号事件，即使两个信号是不同的，也只有一个event_base可以接收到信号。
 
 kqueue没有这个限制。
 
@@ -234,13 +234,11 @@ int event_assign(struct event *event, struct event_base *base,
 
 实际上对大多数程序而言，前面所说的代价是很小并且没有什么关系的。所以，尽可能的使用`event_new() `，除非确信在堆上分配event时会有显著的性能惩罚。另外使用`event_assign()`可能会照成难以诊断的错误，因为谁也说不准将来Libevent的event结构会变成啥样。
 
-`event_assign()`的参数除了event外，与`event_ne()`是一致的，event参数必须指向一个未初始化的event结构，这里所谓的未初始化，指的是还没有与一个event_base关联，调用event_assign本身就是在做这个关联的工作。
+`event_assign()`的参数除了event外，与`event_new()`是一致的，event参数必须指向一个未初始化的event结构，这里所谓的未初始化，指的是还没有与一个event_base关联，调用event_assign本身就是在做这个关联的工作。
 
-也可以用event_assign来初始化在栈上或者静态分配的eveent。
+也可以用event_assign来初始化在栈上或者静态分配的event。
 
-Never call event_assign() on an event that is already pending in an event base.  Doing so can lead to extremely hard-to-diagnose errors.  If the event is already initialized and pending, call event_del() on it **before** you call event_assign() on it again.
-
-要注意的是，绝对不要对一个已经在某个event_base上挂起的时间调用event_assign。如果一个event已经初始化并且已经挂起，那么就必须在调用event_assign之前调用event_del。
+要注意的是，绝对不要对一个已经在某个event_base上挂起的事件调用event_assign。如果一个event已经初始化并且已经挂起，那么就必须在调用event_assign之前调用event_del将其从原event_base上移除。
 
 成功返回0，失败返回-1。
 
@@ -385,7 +383,7 @@ int event_priority_set(struct event *event, int priority);
 
 函数成功返回0，失败返回-1。
 
-当多个不同优先级的事件变成活动时，低优先权的事件不会运行，如前面event_loop的伪代码所示，Libevent只会运行最高优先权的事件，然后再坚持事件。只有没有更高优先权的活动事件时才会运行低优先权的事件。
+当多个不同优先级的事件变成活动时，低优先权的事件不会运行，如前面event_loop的伪代码所示，Libevent只会运行最高优先权的事件，然后再检测事件。只有没有更高优先权的活动事件时才会运行低优先权的事件。
 
 ### 例子
 
@@ -414,7 +412,7 @@ void main_loop(evutil_socket_t fd)
 }
 ```
 
-如果没有设置事件的优先级，这里的与前面关于event_base_priority_init的说明有些不太明确的地方，在那里，n_priorities必须至少为1，事件缺省的优先级为n_priorities/2，但是这里的说明是event_base的队列数/2，不知道这个队列数指的是什么，如果就理解为与n_priorities相同倒是不矛盾，但是从概念上来说不应该是同一个东西。
+在创建事件时，会缺省设置事件优先级为event_base中各优先级队列的个数除以2，也就是把一个事的优先级件置为中间优先级，这里需要明确一点，各优先级队列的总数是等于n_priorities的，因此与前面说到event_base_priority_init时的设置本质上是一样的。
 
 ## Inspecting event status
 ### event_pending
