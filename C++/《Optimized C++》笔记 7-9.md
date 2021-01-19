@@ -1,5 +1,3 @@
-
-
 [TOC]
 # Chapter 7 Optimize Hot Statements
 
@@ -1131,7 +1129,7 @@ GNU项目有个命令gperf可以用来生成完美哈希函数，对于小数据
 
 很显然，迭代次数足够多的时候，结果是符合预期的，hash最好，二分查找次之，最后是线性查找。
 
-但是，显然，出于标准库的立足点，标准库算法效率可能会大大低于手写算法。这种标准库算法和良好的手写算法性能上的差距被叫做Stepanov抽象惩罚，Alexander Stepanov是标准库算法和容器类最早的设计者，当初甚至没有编译器可以用。Stepanov抽象惩罚是不可避免的，这也不能说是不好的事情，只是每一个程序员都应该记住这事。
+但是，显然，出于标准库的立足点，标准库算法效率可能会大大低于手写算法。这种标准库算法和良好的手写算法性能上的差距被叫做Stepanov抽象惩罚，Alexander Stepanov是标准库算法和容器类最早的设计者，当初甚至没有编译器可以用。Stepanov抽象惩罚是不可避免的，这也不能说是不好的事情，只是每一个程序员都应该记住这事，也就是手写算法可以比标准库算法性能更好，毕竟立足点是不一样的。
 
 ## Optimize Sorting with the C++ Standard Library
 
@@ -1143,12 +1141,10 @@ GNU项目有个命令gperf可以用来生成完美哈希函数，对于小数据
 
 ## Summary
 
-- The mix of features in C++ provides a continuum of implementation choices ranging from hands-off automations and expressiveness on the one hand,to fine control over performance on the other hand.It is this degree of choice that makes it possible to tune C++ programs to meet requirements for performance.
-- There are enough parts in most activities worth optimizing that human beings cannot reliably remember them all.Paper has a better memory.
-- In a test of searching a table with 26 keys,std::unordered_map with string keys was only 52% faster than std::map with string keys,Given the hype about hashing being a performance win,this result was surprising.
-- Stepanov’s Abstraction Penalty is toll for using highly productive tools like the C++ standard library algorithms.
+- C++之所以能够满足各种性能需求，在于其所提供各种各样的特性，在开发过程中可以不断的对这些特性做权衡和选择。
 
+- 优化过程中注意记录，不要依赖人自己的记忆。
 
+- 哈希表虽然比非哈希表搜索要快，但是可能并没有想象的那么快。
 
-
-
+- Stepanov抽象惩罚在使用C++标准库时是不可避免的。
